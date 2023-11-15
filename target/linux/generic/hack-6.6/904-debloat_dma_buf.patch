@@ -46,7 +46,8 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
 -obj-$(CONFIG_UDMABUF)		+= udmabuf.o
 -obj-$(CONFIG_DMABUF_SYSFS_STATS) += dma-buf-sysfs-stats.o
 +dma-buf-objs-$(CONFIG_DMABUF_HEAPS)	+= dma-heap.o
-+obj-$(CONFIG_DMABUF_HEAPS)		+= heaps/
++dma-buf-objs-$(CONFIG_DMABUF_HEAPS_SYSTEM)    += heaps/system_heap.o
++dma-buf-objs-$(CONFIG_DMABUF_HEAPS_CMA)       += heaps/cma_heap.o
 +dma-buf-objs-$(CONFIG_SYNC_FILE)	+= sync_file.o
 +dma-buf-objs-$(CONFIG_SW_SYNC)		+= sw_sync.o sync_debug.o
 +dma-buf-objs-$(CONFIG_UDMABUF)		+= udmabuf.o

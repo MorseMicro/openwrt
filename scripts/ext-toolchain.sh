@@ -345,24 +345,6 @@ print_config() {
 		echo "CONFIG_TARGET_${mktarget}_${mksubtarget}=y" >> "$config"
 	fi
 
-	if test_feature "softfloat"; then
-		echo "CONFIG_SOFT_FLOAT=y" >> "$config"
-	else
-		echo "# CONFIG_SOFT_FLOAT is not set" >> "$config"
-	fi
-
-	if test_feature "ipv6"; then
-		echo "CONFIG_IPV6=y" >> "$config"
-	else
-		echo "# CONFIG_IPV6 is not set" >> "$config"
-	fi
-
-	if test_feature "locale"; then
-		echo "CONFIG_BUILD_NLS=y" >> "$config"
-	else
-		echo "# CONFIG_BUILD_NLS is not set" >> "$config"
-	fi
-
 	echo "CONFIG_DEVEL=y" >> "$config"
 	echo "CONFIG_EXTERNAL_TOOLCHAIN=y" >> "$config"
 	echo "CONFIG_TOOLCHAIN_ROOT=\"$TOOLCHAIN\"" >> "$config"

@@ -156,6 +156,9 @@ detect_mac80211() {
 	for _dev in /sys/class/ieee80211/*; do
 		[ -e "$_dev" ] || continue
 
+		# Skip morse devices.
+		basename "$(readlink -f "$_dev/device/driver/")" | grep '^morse_' && continue
+
 		dev="${_dev##*/}"
 
 		mode_band=""

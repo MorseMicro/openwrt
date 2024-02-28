@@ -1,0 +1,137 @@
+This patch adds the device tree overlay file for imx708 camera module.
+diff --git a/arch/arm/boot/dts/overlays/Makefile b/arch/arm/boot/dts/overlays/Makefile
+index 737ba5305..d4739da2e 100644
+--- a/arch/arm/boot/dts/overlays/Makefile
++++ b/arch/arm/boot/dts/overlays/Makefile
+@@ -106,6 +106,7 @@ dtbo-$(CONFIG_ARCH_BCM2835) += \
+ 	imx290.dtbo \
+ 	imx378.dtbo \
+ 	imx477.dtbo \
++	imx708.dtbo \
+ 	imx519.dtbo \
+ 	iqaudio-codec.dtbo \
+ 	iqaudio-dac.dtbo \
+diff --git a/arch/arm/boot/dts/overlays/imx708-overlay.dts b/arch/arm/boot/dts/overlays/imx708-overlay.dts
+new file mode 100644
+index 000000000..4ea6ac5f0
+--- /dev/null
++++ b/arch/arm/boot/dts/overlays/imx708-overlay.dts
+@@ -0,0 +1,118 @@
++// SPDX-License-Identifier: GPL-2.0-only
++// Definitions for imx708 camera module on VC I2C bus
++/dts-v1/;
++/plugin/;
++
++#include <dt-bindings/gpio/gpio.h>
++
++/{
++	compatible = "brcm,bcm2835";
++
++	fragment@0 {
++		target = <&i2c0if>;
++		__overlay__ {
++			status = "okay";
++		};
++	};
++
++	clk_frag: fragment@1 {
++		target = <&cam1_clk>;
++		__overlay__ {
++			status = "okay";
++			clock-frequency = <24000000>;
++		};
++	};
++
++	fragment@2 {
++		target = <&i2c0mux>;
++		__overlay__ {
++			status = "okay";
++		};
++	};
++
++	reg_frag: fragment@3 {
++		target = <&cam1_reg>;
++		cam_reg: __overlay__ {
++			startup-delay-us = <70000>;
++			off-on-delay-us = <30000>;
++			regulator-min-microvolt = <2700000>;
++			regulator-max-microvolt = <2700000>;
++		};
++	};
++
++	i2c_frag: fragment@100 {
++		target = <&i2c_csi_dsi>;
++		__overlay__ {
++			#address-cells = <1>;
++			#size-cells = <0>;
++			status = "okay";
++
++			imx708: imx708@1a {
++				compatible = "sony,imx708";
++				reg = <0x1a>;
++				status = "okay";
++
++				clocks = <&cam1_clk>;
++				clock-names = "xclk";
++
++				VANA1-supply = <&cam1_reg>;	/* 2.8v */
++				VANA2-supply = <&cam_dummy_reg>;/* 1.8v */
++				VDIG-supply = <&cam_dummy_reg>;	/* 1.1v */
++				VDDL-supply = <&cam_dummy_reg>;	/* 1.8v */
++
++				rotation = <180>;
++				orientation = <2>;
++
++				port {
++					imx708_0: endpoint {
++						remote-endpoint = <&csi_ep>;
++						clock-lanes = <0>;
++						data-lanes = <1 2>;
++						clock-noncontinuous;
++						link-frequencies =
++							/bits/ 64 <450000000>;
++					};
++				};
++			};
++
++			vcm_node: dw9817@c {
++				compatible = "dongwoon,dw9817-vcm";
++				reg = <0x0c>;
++				status = "disabled";
++				VDD-supply = <&cam1_reg>;
++			};
++		};
++	};
++
++	csi_frag: fragment@101 {
++		target = <&csi1>;
++		csi: __overlay__ {
++			status = "okay";
++			brcm,media-controller;
++
++			port {
++				csi_ep: endpoint {
++					remote-endpoint = <&imx708_0>;
++					clock-lanes = <0>;
++					data-lanes = <1 2>;
++					clock-noncontinuous;
++				};
++			};
++		};
++	};
++
++	__overrides__ {
++		rotation = <&imx708>,"rotation:0";
++		orientation = <&imx708>,"orientation:0";
++		media-controller = <&csi>,"brcm,media-controller?";
++		cam0 = <&i2c_frag>, "target:0=",<&i2c_vc>,
++		       <&csi_frag>, "target:0=",<&csi0>,
++		       <&clk_frag>, "target:0=",<&cam0_clk>,
++		       <&reg_frag>, "target:0=",<&cam0_reg>,
++		       <&imx708>, "clocks:0=",<&cam0_clk>,
++		       <&imx708>, "VANA1-supply:0=",<&cam0_reg>,
++		       <&vcm_node>, "VDD-supply:0=",<&cam0_reg>;
++		vcm = <&vcm_node>, "status=okay",
++		      <&imx708>,"lens-focus:0=", <&vcm_node>;
++	};
++};

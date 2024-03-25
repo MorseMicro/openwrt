@@ -31,7 +31,7 @@ drv_mac80211_init_device_config() {
 	config_add_string distance
 	config_add_string ifname_prefix
 	config_add_string macaddr_base
-	config_add_int radio beacon_int chanbw frag rts
+	config_add_int radio chanbw frag rts
 	config_add_int rxantenna txantenna txpower min_tx_power
 	config_add_int num_global_macaddr multiple_bssid
 	config_add_boolean noscan ht_coex acs_exclude_dfs background_radar
@@ -95,6 +95,9 @@ drv_mac80211_init_iface_config() {
 	config_add_int $MP_CONFIG_INT
 	config_add_boolean $MP_CONFIG_BOOL
 	config_add_string $MP_CONFIG_STRING
+
+	#beacon interval
+	config_add_int beacon_int
 }
 
 mac80211_add_capabilities() {
@@ -792,7 +795,7 @@ mac80211_add_mesh_params() {
 
 mac80211_setup_adhoc() {
 	local enable=$1
-	json_get_vars bssid ssid key mcast_rate
+	json_get_vars bssid ssid key mcast_rate beacon_int:100
 
 	NEWUMLIST="${NEWUMLIST}$ifname "
 
@@ -851,7 +854,7 @@ mac80211_setup_adhoc() {
 }
 
 mac80211_setup_mesh() {
-	json_get_vars ssid mesh_id mcast_rate
+	json_get_vars ssid mesh_id mcast_rate beacon_int
 	json_get_values iface_basic_rate_list basic_rate
 
 	mcval=
@@ -1133,7 +1136,7 @@ drv_mac80211_setup() {
 		country chanbw distance \
 		txpower \
 		rxantenna txantenna \
-		frag rts beacon_int:100 htmode \
+		frag rts htmode \
 		num_global_macaddr:1 multiple_bssid \
 		ifname_prefix macaddr_base
 	json_get_values basic_rate_list basic_rate

@@ -1,0 +1,30 @@
+From 829465e33fa14517888396fc6189c60f4209c1b4 Mon Sep 17 00:00:00 2001
+From: Sven Schwermer <sven.schwermer@disruptive-technologies.com>
+Date: Thu, 7 Apr 2022 09:32:23 +0200
+Subject: [PATCH 2/3] dt-bindings: leds: Optional multi-led unit address
+
+The unit address does not make sense in all cases the multi-led node is
+used, e.g. for the upcoming PWM multi-color LED driver.
+
+Signed-off-by: Sven Schwermer <sven.schwermer@disruptive-technologies.com>
+Reviewed-by: Rob Herring <robh@kernel.org>
+---
+ .../devicetree/bindings/leds/leds-class-multicolor.yaml         | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Documentation/devicetree/bindings/leds/leds-class-multicolor.yaml b/Documentation/devicetree/bindings/leds/leds-class-multicolor.yaml
+index 37445c68c..f41d021ed 100644
+--- a/Documentation/devicetree/bindings/leds/leds-class-multicolor.yaml
++++ b/Documentation/devicetree/bindings/leds/leds-class-multicolor.yaml
+@@ -20,7 +20,7 @@ description: |
+   within this documentation directory.
+ 
+ patternProperties:
+-  "^multi-led@([0-9a-f])$":
++  "^multi-led(@[0-9a-f])?$":
+     type: object
+     description: Represents the LEDs that are to be grouped.
+     properties:
+-- 
+2.25.1
+

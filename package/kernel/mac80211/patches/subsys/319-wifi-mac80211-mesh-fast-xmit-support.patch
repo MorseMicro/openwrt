@@ -157,7 +157,7 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
 +	if (!skb)
 +		return true;
 +
-+	skb_set_queue_mapping(skb, ieee80211_select_queue(sdata, sta, skb));
++	skb_set_queue_mapping(skb, __ieee80211_select_queue(sdata, sta, skb));
 +
 +	meshhdr = (struct ieee80211s_hdr *)entry->hdr;
 +	if ((meshhdr->flags & MESH_FLAGS_AE) == MESH_FLAGS_AE_A5_A6) {

@@ -11,10 +11,10 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
 
 --- a/net/mac80211/rx.c
 +++ b/net/mac80211/rx.c
-@@ -2726,6 +2726,65 @@ ieee80211_deliver_skb(struct ieee80211_r
+@@ -2723,6 +2723,65 @@ ieee80211_deliver_skb(struct ieee80211_r
  	}
  }
- 
+
 +#ifdef CPTCFG_MAC80211_MESH
 +static bool
 +ieee80211_rx_mesh_fast_forward(struct ieee80211_sub_if_data *sdata,
@@ -77,10 +77,10 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
  static ieee80211_rx_result
  ieee80211_rx_mesh_data(struct ieee80211_sub_if_data *sdata, struct sta_info *sta,
  		       struct sk_buff *skb)
-@@ -2830,6 +2889,10 @@ ieee80211_rx_mesh_data(struct ieee80211_
- 
+@@ -2819,6 +2878,10 @@ ieee80211_rx_mesh_data(struct ieee80211_
+
  	skb_set_queue_mapping(skb, ieee802_1d_to_ac[skb->priority]);
- 
+
 +	if (!multicast &&
 +	    ieee80211_rx_mesh_fast_forward(sdata, skb, mesh_hdrlen))
 +		return RX_QUEUED;
@@ -88,7 +88,7 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
  	ieee80211_fill_mesh_addresses(&hdr, &hdr.frame_control,
  				      eth->h_dest, eth->h_source);
  	hdrlen = ieee80211_hdrlen(hdr.frame_control);
-@@ -2871,6 +2934,7 @@ ieee80211_rx_mesh_data(struct ieee80211_
+@@ -2857,6 +2920,7 @@ ieee80211_rx_mesh_data(struct ieee80211_
  	info->control.flags |= IEEE80211_TX_INTCFL_NEED_TXPROCESSING;
  	info->control.vif = &sdata->vif;
  	info->control.jiffies = jiffies;
@@ -96,31 +96,32 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
  	if (multicast) {
  		IEEE80211_IFSTA_MESH_CTR_INC(ifmsh, fwded_mcast);
  		memcpy(fwd_hdr->addr2, sdata->vif.addr, ETH_ALEN);
-@@ -2892,7 +2956,6 @@ ieee80211_rx_mesh_data(struct ieee80211_
+@@ -2878,7 +2942,6 @@ ieee80211_rx_mesh_data(struct ieee80211_
  	}
- 
+
  	IEEE80211_IFSTA_MESH_CTR_INC(ifmsh, fwded_frames);
 -	fwd_skb->dev = sdata->dev;
  	ieee80211_add_pending_skb(local, fwd_skb);
- 
+
  rx_accept:
 --- a/net/mac80211/ieee80211_i.h
 +++ b/net/mac80211/ieee80211_i.h
-@@ -2027,6 +2027,8 @@ void __ieee80211_xmit_fast(struct ieee80
- 			   struct ieee80211_fast_tx *fast_tx,
- 			   struct sk_buff *skb, bool ampdu,
- 			   const u8 *da, const u8 *sa);
+@@ -1996,6 +1996,9 @@ void ieee80211_check_fast_xmit(struct st
+ void ieee80211_check_fast_xmit_all(struct ieee80211_local *local);
+ void ieee80211_check_fast_xmit_iface(struct ieee80211_sub_if_data *sdata);
+ void ieee80211_clear_fast_xmit(struct sta_info *sta);
 +void ieee80211_aggr_check(struct ieee80211_sub_if_data *sdata,
 +			  struct sta_info *sta, struct sk_buff *skb);
- 
- /* HT */
- void ieee80211_apply_htcap_overrides(struct ieee80211_sub_if_data *sdata,
++
+ int ieee80211_tx_control_port(struct wiphy *wiphy, struct net_device *dev,
+ 			      const u8 *buf, size_t len,
+ 			      const u8 *dest, __be16 proto, bool unencrypted,
 --- a/net/mac80211/tx.c
 +++ b/net/mac80211/tx.c
 @@ -1197,10 +1197,8 @@ static bool ieee80211_tx_prep_agg(struct
  	return queued;
  }
- 
+
 -static void
 -ieee80211_aggr_check(struct ieee80211_sub_if_data *sdata,
 -		     struct sta_info *sta,

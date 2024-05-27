@@ -406,23 +406,34 @@ $(eval $(call KernelPackage,drm-radeon))
 # Video Capture
 #
 
+define KernelPackage/media-controller
+  TITLE:=Media Controller
+  KCONFIG:= \
+  CONFIG_MEDIA_SUPPORT \
+  CONFIG_MEDIA_CONTROLLER=y
+  FILES:=$(LINUX_DIR)/drivers/media/mc/mc.ko
+endef
+
+define KernelPackage/media-controller/description
+  Media Controller used by video and audio drivers.
+endef
+
+$(eval $(call KernelPackage,media-controller))
+
 define KernelPackage/video-core
   SUBMENU:=$(VIDEO_MENU)
   TITLE=Video4Linux support
-  DEPENDS:=+PACKAGE_kmod-i2c-core:kmod-i2c-core
+  DEPENDS:=+PACKAGE_kmod-i2c-core:kmod-i2c-core +kmod-media-controller
   KCONFIG:= \
-	CONFIG_MEDIA_SUPPORT \
 	CONFIG_MEDIA_CAMERA_SUPPORT=y \
-	CONFIG_MEDIA_CONTROLLER=y \
 	CONFIG_MEDIA_CONTROLLER_DVB=n \
 	CONFIG_VIDEO_DEV \
 	CONFIG_VIDEO_V4L2_SUBDEV_API=y \
 	CONFIG_V4L_PLATFORM_DRIVERS=y
   FILES:= \
 	$(LINUX_DIR)/drivers/media/$(V4L2_DIR)/videodev.ko \
-	$(LINUX_DIR)/drivers/media/$(V4L2_DIR)/v4l2-dv-timings.ko \
-	$(LINUX_DIR)/drivers/media/mc/mc.ko
-  AUTOLOAD:=$(call AutoLoad,60, videodev v4l2-common v4l2-dv-timings mc)
+	$(LINUX_DIR)/drivers/media/$(V4L2_DIR)/v4l2-dv-timings.ko
+	AUTOLOAD:=$(call AutoLoad,60,videodev v4l2-common v4l2-dv-timings)
 endef
 
 define KernelPackage/video-core/description
@@ -1135,7 +1146,6 @@ define camera-sensor
             +kmod-video-v4l2-fwnode \
             $(2)
     KCONFIG:=CONFIG_VIDEO_$$(subst $(1),$$(shell echo $(1) | tr '[:lower:]' '[:upper:]'),$(1)) \
-            CONFIG_MEDIA_SUPPORT \
             CONFIG_VIDEO_V4L2_SUBDEV_API=y
     FILES:=$(LINUX_DIR)/drivers/media/i2c/$(1).ko
     AUTOLOAD:=$$(call AutoProbe,$(1))

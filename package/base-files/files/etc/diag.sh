@@ -1,6 +1,12 @@
 #!/bin/sh
 # Copyright (C) 2006-2019 OpenWrt.org
 
+# Allow a package to override the diagnostic state function.
+if [ -e /etc/diag_override.sh ]; then
+	. /etc/diag_override.sh
+	return 0
+fi
+
 . /lib/functions/leds.sh
 
 boot="$(get_dt_led boot)"

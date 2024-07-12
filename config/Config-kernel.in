@@ -434,6 +434,15 @@ config KERNEL_DYNAMIC_DEBUG
 	  implicitly compiles in all pr_debug() and dev_dbg() calls, which
 	  enlarges the kernel text size by about 2%.
 
+config KERNEL_DYNAMIC_DEBUG_CORE
+	bool "Compile the kernel with dynamic printk core"
+	select KERNEL_DEBUG_FS
+	help
+	  Compiles debug level message support into the kernel, which would not
+	  otherwise be available at runtime. This does not compile in kernel
+	  pr_debug messages, but this allows modules to use pr_debug if they are
+	  compiled with -DDYNAMIC_DEBUG_MODULE -DDEBUG.
+
 config KERNEL_EARLY_PRINTK
 	bool "Compile the kernel with early printk"
 	default y if TARGET_bcm53xx

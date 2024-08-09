@@ -6,6 +6,8 @@
 include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/image.mk
 
+DEVICE_VARS += SYSINFO_MODEL SYSINFO_BOARD_NAME
+
 FAT32_BLOCK_SIZE=1024
 FAT32_BLOCKS=$(shell echo $$(($(CONFIG_TARGET_KERNEL_PARTSIZE)*1024*1024/$(FAT32_BLOCK_SIZE))))
 
@@ -46,6 +48,17 @@ define Build/boot-2711
 	mcopy -i $@.boot $(KDIR)/fixup4.dat ::
 	mcopy -i $@.boot $(KDIR)/fixup4cd.dat ::
 	mcopy -i $@.boot $(KDIR)/fixup4x.dat ::
+endef
+
+define Build/boot-ekh
+	# Put ekh01 model info into device tree (picked up by 01_sysinfo).
+	# This uses a custom overlay which accepts parameters (via RPI's __overrides__ mechanism),
+	# and writes those parameters into the root of the device tree (as sysinfo-model
+	# and sysinfo-board-name).
+	# Note that we cannot easily put it on the rootfs, because our multi-profile builds share this
+	# (i.e. they only differ in /boot).
+	# We can't easily use /boot directly because that's not mounted early in the preinit process.
+	echo -e '\ndtoverlay=sysinfo,board-name="$(SYSINFO_BOARD_NAME)",model="$(SYSINFO_MODEL)"' | cat distroconfig.txt - | mcopy -o -i $@.boot - ::/distroconfig.txt
 endef
 
 define Build/sdcard-img
@@ -175,7 +188,7 @@ endif
 
 define Device/morse_ekh01
   $(Device/rpi-4)
-  DEVICE_VENDOR := Morse Micro
+  DEVICE_VENDOR := MorseMicro
   DEVICE_MODEL := EKH01
   DEVICE_VARIANT :=
   # remove the factory image
@@ -183,8 +196,18 @@ define Device/morse_ekh01
   # Simplify by removing board and OpenWRT version.
   IMAGE_PREFIX = $$(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(IMG_PREFIX_EXTRA)$$(call sanitize,$$(DEVICE_TITLE))
   DEVICE_IMG_NAME = $$(IMAGE_PREFIX)-$$(1)-$$(2)
+  # This is very similar to DEVICE_TITLE, but we want to handle the 'variants' differently
+  # (i.e. EKH01v1 vs EKH01 v1, and EKH01-03 vs EKH01 03).
+  SYSINFO_MODEL := MorseMicro EKH01
+  # SYSINFO_BOARD_NAME will usually be the first entry in SUPPORTED_DEVICES,
+  # This is the name on device; SUPPORTED_DEVICES are the names in the metadata.
+  # SYSINFO_BOARD_NAME must be one of the names in SUPPORTED_DEVICES for upgrades
+  # to work.
+  SYSINFO_BOARD_NAME := morse,ekh01
   SUPPORTED_DEVICES := morse,ekh01 morse,ekh01-05us
   DEVICE_PACKAGES += kmod-morse netifd-morse
+  IMAGE/sysupgrade.img.gz := boot-common | boot-2711 | boot-ekh | sdcard-img | gzip | append-metadata
+  IMAGE/factory.img.gz := boot-common | boot-2711 | boot-ekh | sdcard-img | gzip
 endef
 ifeq ($(SUBTARGET),bcm2711)
   TARGET_DEVICES += morse_ekh01
@@ -193,6 +216,8 @@ endif
 define Device/morse_ekh01v1
   $(Device/morse_ekh01)
   DEVICE_VARIANT := v1
+  SYSINFO_MODEL := MorseMicro EKH01v1
+  SYSINFO_BOARD_NAME := morse,ekh01v1
   SUPPORTED_DEVICES := morse,ekh01v1 morse,ekh01
 endef
 ifeq ($(SUBTARGET),bcm2711)
@@ -202,6 +227,8 @@ endif
 define Device/morse_ekh01v2
   $(Device/morse_ekh01)
   DEVICE_VARIANT := v2
+  SYSINFO_MODEL := MorseMicro EKH01v2
+  SYSINFO_BOARD_NAME := morse,ekh01v2
   SUPPORTED_DEVICES := morse,ekh01v2
 endef
 ifeq ($(SUBTARGET),bcm2711)
@@ -211,6 +238,8 @@ endif
 define Device/morse_ekh01-03
   $(Device/morse_ekh01)
   DEVICE_VARIANT := 03
+  SYSINFO_MODEL := MorseMicro EKH01-03
+  SYSINFO_BOARD_NAME := morse,ekh01-03
   SUPPORTED_DEVICES := morse,ekh01-03
 endef
 ifeq ($(SUBTARGET),bcm2711)

@@ -65,6 +65,10 @@
 			color = <LED_COLOR_ID_RGB>;
 			function = LED_FUNCTION_INDICATOR;
 			max-brightness = <255>;
+			linux,default-trigger = "timer";
+			led-pattern = <100 100>;
+			default-brightness = <255>;
+			default-mc-intensity = <0 255 0>;
 
 			led1_red {
 				pwms = <&pwm1_red 0 1000000>;

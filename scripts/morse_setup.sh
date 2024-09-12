@@ -142,6 +142,7 @@ INITIALIZE=
 EXTRAS=
 EXT_TOOLCHAIN=
 GIT_SRC_OVERRIDES=( )
+MODE=""
 while getopts ":l:s:b:x:g:ie:Emh" OPT; do
     case "${OPT}" in
         b)

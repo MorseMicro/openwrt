@@ -39,6 +39,7 @@ PKG_CONFIG_DEPENDS:= \
 	CONFIG_PACKAGE_IWLWIFI_DEBUG \
 	CONFIG_PACKAGE_IWLWIFI_DEBUGFS \
 	CONFIG_PACKAGE_RTLWIFI_DEBUG \
+	CONFIG_PACKAGE_MAC80211_WEXT \
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -155,6 +156,9 @@ define KernelPackage/mac80211/config
 		bool "Enable 802.11s mesh support"
 		default y
 
+	config PACKAGE_MAC80211_WEXT
+		bool "Enable wireless extension"
+		default n
   endif
 endef
 
@@ -253,6 +257,11 @@ endif
 ifdef CONFIG_PACKAGE_MAC80211_TRACING
   config-y += \
 	IWLWIFI_DEVICE_TRACING
+endif
+
+ifdef CONFIG_PACKAGE_MAC80211_WEXT
+  config-y += \
+	CFG80211_WEXT
 endif
 
 config-$(call config_package,mac80211-hwsim) += MAC80211_HWSIM

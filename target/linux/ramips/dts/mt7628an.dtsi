@@ -371,6 +371,28 @@
 		reset-names = "host", "device";
 	};
 
+	mmc_clock: mmc_clock@0 {
+		#clock-cells = <0>;
+		compatible = "fixed-clock";
+		clock-frequency = <48000000>;
+	};
+	mmc_fixed_3v3: fixedregulator@0 {
+		compatible = "regulator-fixed";
+		regulator-name = "mmc_power";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		enable-active-high;
+		regulator-always-on;
+	};
+	mmc_fixed_1v8_io: fixedregulator@1 {
+		compatible = "regulator-fixed";
+		regulator-name = "mmc_io";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		enable-active-high;
+		regulator-always-on;
+	};
+
 	sdhci: mmc@10130000 {
 		compatible = "mediatek,mt7620-mmc", "ralink,mt7620-sdhci";
 		reg = <0x10130000 0x4000>;
@@ -382,15 +404,15 @@
 		disable-wp;
 		no-1-8-v;
 
-		clocks = <&sysc 16>, <&sysc 16>;
+		pinctrl-names = "default", "state_uhs";
+		pinctrl-0 = <&sdxc_pins>;
+		pinctrl-1 = <&sdxc_pins>;
+
+		clocks = <&mmc_clock>, <&mmc_clock>;
 		clock-names = "source", "hclk";
 
 		interrupt-parent = <&intc>;
 		interrupts = <14>;
-
-		pinctrl-names = "default", "state_uhs";
-		pinctrl-0 = <&sdxc_pins>;
-		pinctrl-1 = <&sdxc_pins>;
 
 		resets = <&sysc 30>;
 		reset-names = "hrst";

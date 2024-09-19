@@ -1023,7 +1023,7 @@ TARGET_DEVICES += xiaomi_miwifi-nano
 define Device/xiaomi_mi-ra75
   IMAGE_SIZE := 14976k
   DEVICE_VENDOR := Xiaomi
-  DEVICE_MODEL := MiWiFi Range Extender AC1200 
+  DEVICE_MODEL := MiWiFi Range Extender AC1200
   DEVICE_VARIANT := RA75
   DEVICE_PACKAGES := kmod-mt76x2
   SUPPORTED_DEVICES += xiaomi,mira75
@@ -1048,3 +1048,39 @@ define Device/zyxel_keenetic-extra-ii
 	check-size | zyimage -d 6162 -v "ZyXEL Keenetic Extra II"
 endef
 TARGET_DEVICES += zyxel_keenetic-extra-ii
+
+define Device/morse_ekh03
+  IMAGE_SIZE := 32448k
+  DEVICE_VENDOR := Morse Micro
+  DEVICE_MODEL := EKH03
+  DEVICE_VARIANT :=
+  # Simplify by removing board and OpenWRT version.
+  IMAGE_PREFIX = $$(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(IMG_PREFIX_EXTRA)$$(call sanitize,$$(DEVICE_TITLE))
+  DEVICE_IMG_NAME = $$(IMAGE_PREFIX)-$$(1)-$$(2)
+  DEVICE_PACKAGES := kmod-usb2 kmod-usb-ohci kmod-usb-ledtrig-usbport \
+	kmod-mmc-mt7620 kmod-i2c-mt7628 \
+	kmod-morse netifd-morse \
+	uboot-envtools
+endef
+
+define Device/morse_ekh03v3
+  $(Device/morse_ekh03)
+  DEVICE_VARIANT := v3
+  SUPPORTED_DEVICES := morse,ekh03v3 morse,ekh03-03
+endef
+TARGET_DEVICES += morse_ekh03v3
+
+define Device/morse_ekh03v4
+  $(Device/morse_ekh03)
+  DEVICE_VARIANT := v4
+  SUPPORTED_DEVICES := morse,ekh03v4 morse,ekh03-05us
+endef
+TARGET_DEVICES += morse_ekh03v4
+
+define Device/morse_ekh04v4
+  $(Device/morse_ekh03)
+  DEVICE_MODEL := EKH04
+  DEVICE_VARIANT:= v4
+  SUPPORTED_DEVICES += morse,ekh04v4
+endef
+TARGET_DEVICES += morse_ekh04v4

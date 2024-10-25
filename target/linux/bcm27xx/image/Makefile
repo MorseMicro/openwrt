@@ -50,7 +50,7 @@ define Build/boot-2711
 	mcopy -i $@.boot $(KDIR)/fixup4x.dat ::
 endef
 
-define Build/boot-ekh
+define Build/boot-ekh01
 	# Put ekh01 model info into device tree (picked up by 01_sysinfo).
 	# This uses a custom overlay which accepts parameters (via RPI's __overrides__ mechanism),
 	# and writes those parameters into the root of the device tree (as sysinfo-model
@@ -58,7 +58,7 @@ define Build/boot-ekh
 	# Note that we cannot easily put it on the rootfs, because our multi-profile builds share this
 	# (i.e. they only differ in /boot).
 	# We can't easily use /boot directly because that's not mounted early in the preinit process.
-	echo -e '\ndtoverlay=sysinfo,board-name="$(SYSINFO_BOARD_NAME)",model="$(SYSINFO_MODEL)"' | cat distroconfig.txt - | mcopy -o -i $@.boot - ::/distroconfig.txt
+	echo -e '\ndtoverlay=sysinfo,board-name="$(SYSINFO_BOARD_NAME)",model="$(SYSINFO_MODEL)"' | cat boards/ekh01/distroconfig.txt - | mcopy -o -i $@.boot - ::/distroconfig.txt
 endef
 
 define Build/sdcard-img
@@ -206,8 +206,8 @@ define Device/morse_ekh01
   SYSINFO_BOARD_NAME := morse,ekh01
   SUPPORTED_DEVICES := morse,ekh01 morse,ekh01-05us
   DEVICE_PACKAGES += kmod-morse netifd-morse
-  IMAGE/sysupgrade.img.gz := boot-common | boot-2711 | boot-ekh | sdcard-img | gzip | append-metadata
-  IMAGE/factory.img.gz := boot-common | boot-2711 | boot-ekh | sdcard-img | gzip
+  IMAGE/sysupgrade.img.gz := boot-common | boot-2711 | boot-ekh01 | sdcard-img | gzip | append-metadata
+  IMAGE/factory.img.gz := boot-common | boot-2711 | boot-ekh01 | sdcard-img | gzip
 endef
 ifeq ($(SUBTARGET),bcm2711)
   TARGET_DEVICES += morse_ekh01

@@ -45,6 +45,10 @@ dtoverlay=morse-ps
 #enable spi
 dtparam=spi=on
 
+#disable SD activity LED by default
+#(we configure it for HaLow later in userspace)
+dtparam=act_led_trigger=none
+
 #adds morse-spi device tree
 dtoverlay=morse-spi
 

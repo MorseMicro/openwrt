@@ -18,3 +18,7 @@ CONFIG_PACKAGE_luci-app-halowlink1guide=y
 CONFIG_PACKAGE_morse-led-artini=y
 CONFIG_MORSE_REGDB_COUNTRY_CODE_FILTER="US|AU"
 CONFIG_MORSE_REGDB_CHANNEL_NEGATIVE_FILTER="1|2|50|51"
+
+# Adding ThinLMAC fw to devices that have space.
+# WARNING: temporarily disabled until we update version.
+# CONFIG_PACKAGE_morse-fw-tlm=y

@@ -220,6 +220,9 @@ start_instance()
 		[ -s "$file" ] && procd_append_param command -H "$file"
 	done
 
+	config_get_bool mdns "$cfg" mdns 1
+	[ "$mdns" -ne 0 ] && procd_add_mdns "http" "tcp" "80" "daemon=uhttpd"
+
 	procd_close_instance
 }
 

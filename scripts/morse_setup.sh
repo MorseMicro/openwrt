@@ -7,8 +7,10 @@ set -ue -o pipefail
 
 usage(){
     cat << EOF
+
 This MorseMicro script provides help automating the initialization of OpenWRT build.
 Make sure you run this script from the top directory of OpenWRT!
+
 Usage:
     ${0} <options>
         options:
@@ -20,7 +22,7 @@ Usage:
                                     files from the board config. Often combined with '-x'
                                     for custom configurations.
 
-            -x                      apply extra diffconfig options in common_extra. Includes
+            -x                      apply extra diffconfig options in common_extra. One of these is
                                     'dev' (no minification, use local git-src if linked, etc.).
 
             -g                      Override the source of a package to use a git-src tree.
@@ -40,9 +42,21 @@ Usage:
                                     unless -e specifies an alternative toolchain path.
 
         eg.:
-            ${0} -i -b ekh03v3/stable
-            ${0} -x camera -x dev -b ekh01v2
+            ${0} -i -b ekh03v3
+            ${0} -m -x dev -b ekh01
+
 EOF
+    echo -e "Available extra (-x) options:\n"
+	ls -1 boards/common_extras | sed 's/\(.*\)_diffconfig/  \1/'
+	echo
+    echo -e "Available board (-b) options (can use build name or individual targets):\n"
+    for b in boards/*; do
+        if [ -e "$b/target_diffconfig" ]; then
+            echo "  $(basename $b)"
+            sed -n 's/CONFIG_TARGET_.*_DEVICE_.*_\(.*\)=y/    \1/p' $b/target_diffconfig
+            echo
+        fi
+    done
 exit "${1}"
 }
 
@@ -173,6 +187,10 @@ if [ "${MODE}" ] &&  [ -z "${TARGET_DEFCONFIG+x}" ] && [ -z "${BOARD+x}" ]; then
     usage 1
 fi
 
+if [ -z "$MODE" ] && [ -z "$INITIALIZE" ]; then
+    usage 1
+fi
+
 if [ "${INITIALIZE}" ]; then
     ./scripts/feeds update -a
     #patch packages if necessary and re-create index files
@@ -191,12 +209,25 @@ fi
 
 case "${MODE}" in
     b)
-        echo "Using ${BOARD}"
-
         if [ ! -d "boards/${BOARD}" ]; then
-            echo "Error: No ${BOARD} board"
-            usage 1
+            FOUND_MULTIPROFILE_TARGET=0
+            for b in boards/*; do
+                if [ -e "$b/target_diffconfig" ]; then
+                    if sed -n 's/CONFIG_TARGET_DEVICE_.*_DEVICE_.*_\(.*\)=y/\1/p' $b/target_diffconfig | grep -qxF "$BOARD"; then
+                        b="$(basename "$b")"
+                        echo "No boards/$BOARD, but '$BOARD' will be built by boards/$b"
+                        FOUND_MULTIPROFILE_TARGET=1
+                        BOARD="$b"
+                    fi
+                fi
+            done
+            if [ "$FOUND_MULTIPROFILE_TARGET" = 0 ]; then
+                echo "Error: No ${BOARD} board"
+                usage 1
+            fi
         fi
+
+        echo "Using ${BOARD}"
 
         if [ "${BOARD}" = "common" ] || [ "${BOARD}" = "common_extras" ]; then
             echo "${BOARD} is not a board!"

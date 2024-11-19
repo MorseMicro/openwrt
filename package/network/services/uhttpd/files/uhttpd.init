@@ -103,6 +103,10 @@ append_ucode_prefix() {
 	fi
 }
 
+append_extra_header() {
+	procd_append_param command -z "$1"
+}
+
 start_instance()
 {
 	UHTTPD_CERT=""
@@ -189,6 +193,8 @@ start_instance()
 	for path in $indexes; do
 		procd_append_param command -I "$path"
 	done
+
+	config_list_foreach "$cfg" extra_header append_extra_header
 
 	config_get https "$cfg" listen_https
 	config_get UHTTPD_KEY  "$cfg" key  /etc/uhttpd.key

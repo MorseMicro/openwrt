@@ -272,6 +272,7 @@ define Device/morse_ekh01-mf15457
   SYSINFO_MODEL := MorseMicro EKH01-mf15457
   SYSINFO_BOARD_NAME := morse,ekh01-mf15457
   SUPPORTED_DEVICES := morse,ekh01-mf15457
+  SPI_OVERLAY := mm810x-spi
 endef
 ifeq ($(SUBTARGET),bcm2711)
   TARGET_DEVICES += morse_ekh01-mf15457

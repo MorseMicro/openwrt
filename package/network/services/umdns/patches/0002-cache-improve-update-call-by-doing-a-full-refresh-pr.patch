@@ -1,0 +1,33 @@
+From fbaca4b6f530d4b2f361ee15c266aa19a708242b Mon Sep 17 00:00:00 2001
+From: John Crispin <john@phrozen.org>
+Date: Tue, 17 Sep 2024 18:00:37 +0200
+Subject: [PATCH 3/3] cache: improve update call by doing a full refresh probe
+
+Signed-off-by: John Crispin <john@phrozen.org>
+---
+ cache.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/cache.c b/cache.c
+index 8324993..384487a 100644
+--- a/cache.c
++++ b/cache.c
+@@ -143,11 +143,11 @@ void
+ cache_update(void)
+ {
+ 	struct interface *iface;
+-	struct cache_service *s;
+ 
+-	vlist_for_each_element(&interfaces, iface, node)
+-		avl_for_each_element(&services, s, avl)
+-			dns_send_question(iface, NULL, s->entry, TYPE_PTR, 0);
++	vlist_for_each_element(&interfaces, iface, node) {
++		dns_send_question(iface, NULL, C_DNS_SD, TYPE_ANY, 0);
++		dns_send_question(iface, NULL, C_DNS_SD, TYPE_PTR, 0);
++	}
+ }
+ 
+ static struct cache_service*
+-- 
+2.34.1
+

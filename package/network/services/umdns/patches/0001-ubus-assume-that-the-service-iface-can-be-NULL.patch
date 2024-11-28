@@ -1,0 +1,29 @@
+From e91ed406ecebb4bc08c346929e25f1b819c19edd Mon Sep 17 00:00:00 2001
+From: Felix Fietkau <nbd@nbd.name>
+Date: Mon, 8 Jan 2024 10:21:48 +0100
+Subject: [PATCH 1/3] ubus: assume that the service iface can be NULL
+
+Fix crash on dump
+
+Signed-off-by: Felix Fietkau <nbd@nbd.name>
+---
+ ubus.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/ubus.c b/ubus.c
+index 30e6121..6991278 100644
+--- a/ubus.c
++++ b/ubus.c
+@@ -104,7 +104,8 @@ umdns_browse(struct ubus_context *ctx, struct ubus_object *obj,
+ 			*local = '\0';
+ 		c2 = blobmsg_open_table(&b, buffer);
+ 		strncat(buffer, ".local", MAX_NAME_LEN);
+-		blobmsg_add_string(&b, "iface", s->iface->name);
++		if (s->iface)
++			blobmsg_add_string(&b, "iface", s->iface->name);
+ 		cache_dump_records(&b, s->entry, array, &hostname);
+ 		if (address)
+ 			cache_dump_records(&b, hostname, array, NULL);
+-- 
+2.34.1
+

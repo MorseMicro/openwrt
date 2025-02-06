@@ -197,15 +197,12 @@ if [ "${INITIALIZE}" ]; then
     #patch packages if necessary and re-create index files
     patch_feeds_packages
     ./scripts/feeds update -i
-    ./scripts/feeds install -p morse -a
     ./scripts/feeds install -a
-    ./scripts/feeds uninstall iwinfo
 
     # For ALL_KMODS to build, we need to remove xtables-addons as it fails to
     # compile when using an external toolchain due to a bug in 998b6d4.
     # The bug is fixed in the upstream 3856074, but not pulled into 23.
     ./scripts/feeds uninstall xtables-addons
-    ./scripts/feeds install -f -p morse iwinfo
 fi
 
 case "${MODE}" in

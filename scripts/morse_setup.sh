@@ -5,6 +5,12 @@
 
 set -ue -o pipefail
 
+error_handler() {
+    2>&1 echo "SETUP FAILED: error $? on line ${BASH_LINENO[0]} from: ${BASH_COMMAND}"
+}
+
+trap error_handler ERR
+
 usage(){
     cat << EOF
 
@@ -47,8 +53,8 @@ Usage:
 
 EOF
     echo -e "Available extra (-x) options:\n"
-	ls -1 boards/common_extras | sed 's/\(.*\)_diffconfig/  \1/'
-	echo
+    ls -1 boards/common_extras | sed 's/\(.*\)_diffconfig/  \1/'
+    echo
     echo -e "Available board (-b) options (can use build name or individual targets):\n"
     for b in boards/*; do
         if [ -e "$b/target_diffconfig" ]; then
@@ -74,17 +80,20 @@ download_toolchain(){
     base_url="$(sed -nE 's/^CONFIG_VERSION_REPO=\"([^\"]+)\"/\1/p' .config)"
     vers=${base_url%%/}
     vers=${vers##http*/}
-    eabi_suffix=$(grep -q '^CONFIG_arm=y' .config && echo "_eabi")
-    toolchain_archive="openwrt-toolchain-${vers}-${target}-${subtarget}_gcc-${gcc_vers}_${libc}${eabi_suffix}.Linux-x86_64"
+    libc_suffix=
+    if grep -q '^CONFIG_arm=y' .config; then
+        libc_suffix=_eabi
+    fi
+    toolchain_archive="openwrt-toolchain-${vers}-${target}-${subtarget}_gcc-${gcc_vers}_${libc}${libc_suffix}.Linux-x86_64"
 
     if [ -n "${INSTALL_PATH}" ]; then
         [ ! -d "${INSTALL_PATH}" ] && mkdir -p "${INSTALL_PATH}"
         TAR_STRIP="--strip-components=2"
-        SUB_FOLDER="${toolchain_archive}/toolchain-${arch}${arch_suffix}_gcc-${gcc_vers}_${libc}${eabi_suffix}"
+        SUB_FOLDER="${toolchain_archive}/toolchain-${arch}${arch_suffix}_gcc-${gcc_vers}_${libc}${libc_suffix}"
         TOOLCHAIN_PATH=${INSTALL_PATH}
     else
         INSTALL_PATH="/opt"
-        TOOLCHAIN_PATH="/opt/${toolchain_archive}/toolchain-${arch}${arch_suffix}_gcc-${gcc_vers}_${libc}${eabi_suffix}"
+        TOOLCHAIN_PATH="/opt/${toolchain_archive}/toolchain-${arch}${arch_suffix}_gcc-${gcc_vers}_${libc}${libc_suffix}"
         SUB_FOLDER=""
         TAR_STRIP=""
     fi

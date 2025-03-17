@@ -252,17 +252,17 @@ ifeq ($(SUBTARGET),bcm2711)
   TARGET_DEVICES += morse_ekh01-03
 endif
 
-define Device/morse_ekh01-mf15457
+define Device/morse_ekh01-01
   $(Device/morse_ekh01)
   DEVICE_MODEL := MM8108-EKH01
-  DEVICE_VARIANT := mf15457
-  SYSINFO_MODEL := MorseMicro EKH01-mf15457
-  SYSINFO_BOARD_NAME := morse,ekh01-mf15457
-  SUPPORTED_DEVICES := morse,ekh01-mf15457
+  DEVICE_VARIANT := 01
+  SYSINFO_MODEL := MorseMicro EKH01-01
+  SYSINFO_BOARD_NAME := morse,ekh01-01
+  SUPPORTED_DEVICES := morse,ekh01-01
   SPI_OVERLAY := mm810x-spi
 endef
 ifeq ($(SUBTARGET),bcm2711)
-  TARGET_DEVICES += morse_ekh01-mf15457
+  TARGET_DEVICES += morse_ekh01-01
 endif
 
 $(eval $(call BuildImage))

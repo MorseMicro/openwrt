@@ -11,7 +11,7 @@ set_state() {
 	morse,ekh01v1 |\
 	morse,ekh01v2 |\
 	morse,ekh01-03 |\
-	morse,ekh01-mf15457 |\
+	morse,ekh01-01 |\
 	raspberrypi,2-model-b |\
 	raspberrypi,2-model-b-rev2 |\
 	raspberrypi,3-model-b |\

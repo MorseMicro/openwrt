@@ -72,7 +72,8 @@ download_toolchain(){
     mkdir -p tmp/dl
     gcc_vers="$(sed -nE 's/^CONFIG_GCC_VERSION=\"([^\"]+)\"/\1/p' .config)"
     arch="$(sed -nE 's/^CONFIG_ARCH=\"([^\"]+)\"/\1/p' .config)"
-    cpu_type="$(sed -nE 's/^CONFIG_CPU_TYPE=\"([^\"]+)\"/\1/p' .config)"
+    cpu_type="$(sed -nE 's/^CONFIG_CPU_TYPE=\" *([^\"]*)\"/\1/p' .config)"
+    arch_suffix=''
     if [ -n "$cpu_type" ]; then
         arch_suffix="_${cpu_type}"
     fi

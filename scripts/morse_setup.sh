@@ -66,6 +66,16 @@ EOF
 exit "${1}"
 }
 
+CONFIG_ALL_KMODS='
+CONFIG_ALL_KMODS=y
+CONFIG_ALL_NONSHARED=y
+
+# We explicity disable kmod-pf-ring here as it does not compile
+# in the upstream. See issue 23621:
+# https://github.com/openwrt/packages/issues/23621
+CONFIG_PACKAGE_kmod-pf-ring=n
+'
+
 download_toolchain(){
     INSTALL_PATH="${1:-}"
     mkdir -p tmp
@@ -256,20 +266,31 @@ case "${MODE}" in
             fi
         done
 
-        # awk 1 is a line by line print from stdin - 1 is an always true command
-        # and the default action is to print line.
-        # I've opted for this instead of cat + echo as I didn't want to unroll globs
-        awk 1 ./boards/common/*_diffconfig > .config
-        if [ "${MINIMAL}" = 1 ]; then
-            awk 1 ./boards/"${BOARD}"/target_diffconfig >> .config
-        else
-            awk 1 ./boards/"${BOARD}"/*_diffconfig >> .config
-        fi
+        (
+            for f in ./boards/common/*_diffconfig; do
+                cat "$f"; echo
+            done
 
-        for extra in $EXTRAS; do
-            echo "Applying $extra config..."
-            awk 1 "./boards/common_extras/${extra}_diffconfig" >> .config
-        done
+            if [ "${MINIMAL}" != 1 ]; then
+                for f in ./boards/"${BOARD}"/*_diffconfig; do
+                    if [ $(basename "$f") != target_diffconfig ]; then
+                        cat "$f"; echo
+                    fi
+                done
+                echo "$CONFIG_ALL_KMODS"
+            fi
+
+            for extra in $EXTRAS; do
+                cat "./boards/common_extras/${extra}_diffconfig"
+                echo
+            done
+
+            cat "./boards/${BOARD}/target_diffconfig"
+            echo
+        ) > .config
+
+        echo Make defconfig...
+        make defconfig
 
         # Remove and recreate symlinks for git-src overrides.
         # Only remove symlinks in git-src, so we dont destroy any user content.
@@ -280,9 +301,6 @@ case "${MODE}" in
             git_path=$(echo "$git_src_override" | cut -f2 -d:)
             ln -vfrs "$git_path" "git-src/$package"
         done
-
-        echo Make defconfig...
-        make defconfig
 
         if [ "${EXT_TOOLCHAIN}" = "1" ]; then
             read -r target subtarget <<<"$(sed -nE 's/^CONFIG_TARGET_([a-z0-9]+)_([a-z0-9]+)=y/\1 \2/p' "boards/${BOARD}/target_diffconfig")"

@@ -125,15 +125,6 @@ CONFIG_BUSYBOX_CONFIG_I2CDUMP=y
 CONFIG_BUSYBOX_CONFIG_I2CDETECT=y
 CONFIG_BUSYBOX_CONFIG_I2CTRANSFER=y
 
-# Compile all kmods
-CONFIG_ALL_KMODS=y
-CONFIG_ALL_NONSHARED=y
-
-# We explicity disable kmod-pf-ring here as it does not compile
-# in the upstream. See issue 23621:
-# https://github.com/openwrt/packages/issues/23621
-CONFIG_PACKAGE_kmod-pf-ring=n
-
 # IPv6 router settings aren't correctly handled in our UI
 # and odhcpd throws several errors. Temporarily disable.
 CONFIG_PACKAGE_odhcpd-ipv6only=n

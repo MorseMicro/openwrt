@@ -13,8 +13,8 @@ PKG_SOURCE_PROTO:=git
 # For now, use Morse repository to include HaLow support.
 PKG_SOURCE_URL:=https://github.com/MorseMicro/iwinfo.git
 PKG_SOURCE_DATE:=2025-03-26
-PKG_SOURCE_VERSION:=318402ab3d48d8f2410b06818c98eaabd73fc6d0
-PKG_MIRROR_HASH:=d98de6eb5d9fb00aa7a7ca2b55a02d85438c277de136196e62e1b55deb3abc19
+PKG_SOURCE_VERSION:=4ed72a8eefce668d3b683d35b48a172d0320753a
+PKG_MIRROR_HASH:=d9d23afae1df8029eb81059517e75eac058c16ab9fab1c303bce270bc4787824
 PKG_MAINTAINER:=Jo-Philipp Wich <jo@mein.io>
 PKG_LICENSE:=GPL-2.0
 

@@ -128,17 +128,17 @@ download_toolchain(){
             SUDO="sudo"
         fi
 
-        if [ ! -f "tmp/dl/${toolchain_archive}.tar.xz" ]; then
-            wget -P tmp/dl "${base_url}/targets/${target}/${subtarget}/${toolchain_archive}.tar.xz"
+        if [ ! -f "tmp/dl/${toolchain_archive}.tar.zst" ]; then
+            wget -P tmp/dl "${base_url}/targets/${target}/${subtarget}/${toolchain_archive}.tar.zst"
         fi
 
-        $SUDO tar -xf "tmp/dl/${toolchain_archive}.tar.xz" -C ${INSTALL_PATH} ${SUB_FOLDER} ${TAR_STRIP}
+        $SUDO tar -xf "tmp/dl/${toolchain_archive}.tar.zst" -C ${INSTALL_PATH} ${SUB_FOLDER} ${TAR_STRIP}
 
         if [ -n "$SUDO" ]; then
                 $SUDO chown -R "$USER:$(id -g)" "${TOOLCHAIN_PATH}"
         fi
 
-        echo "${toolchain_archive}.tar.xz extracted to ${TOOLCHAIN_PATH}"
+        echo "${toolchain_archive}.tar.zst extracted to ${TOOLCHAIN_PATH}"
     else
         echo "${TOOLCHAIN_PATH} already contains a toolchain!"
     fi

@@ -23,23 +23,22 @@ Signed-off-by: Arien Judge <arien.judge@morsemicro.com>
  create mode 100644 board/morsemicro/halowlink1/env
  create mode 100644 configs/morsemicro_halowlink1_defconfig
 
-diff --git a/arch/mips/dts/Makefile b/arch/mips/dts/Makefile
-index de3e91b803..a4e881f445 100644
---- a/arch/mips/dts/Makefile
-+++ b/arch/mips/dts/Makefile
-@@ -14,6 +14,7 @@ dtb-$(CONFIG_BOARD_COMTREND_CT5361) += comtrend,ct-5361.dtb
- dtb-$(CONFIG_BOARD_COMTREND_VR3032U) += comtrend,vr-3032u.dtb
+Index: u-boot-2024.10/arch/mips/dts/Makefile
+===================================================================
+--- u-boot-2024.10.orig/arch/mips/dts/Makefile
++++ u-boot-2024.10/arch/mips/dts/Makefile
+@@ -15,6 +15,7 @@ dtb-$(CONFIG_BOARD_COMTREND_VR3032U) +=
  dtb-$(CONFIG_BOARD_COMTREND_WAP5813N) += comtrend,wap-5813n.dtb
  dtb-$(CONFIG_BOARD_HUAWEI_HG556A) += huawei,hg556a.dtb
+ dtb-$(CONFIG_BOARD_INTENO_XG6846) += inteno,xg6846.dtb
 +dtb-$(CONFIG_BOARD_MORSEMICRO_HALOWLINK1) += morsemicro,halowlink1.dtb
  dtb-$(CONFIG_BOARD_MT7620_RFB) += mediatek,mt7620-rfb.dtb
  dtb-$(CONFIG_BOARD_MT7620_MT7530_RFB) += mediatek,mt7620-mt7530-rfb.dtb
  dtb-$(CONFIG_BOARD_MT7621_RFB) += mediatek,mt7621-rfb.dtb
-diff --git a/arch/mips/dts/morsemicro,halowlink1.dts b/arch/mips/dts/morsemicro,halowlink1.dts
-new file mode 100644
-index 0000000000..cebb190ad1
+Index: u-boot-2024.10/arch/mips/dts/morsemicro,halowlink1.dts
+===================================================================
 --- /dev/null
-+++ b/arch/mips/dts/morsemicro,halowlink1.dts
++++ u-boot-2024.10/arch/mips/dts/morsemicro,halowlink1.dts
 @@ -0,0 +1,163 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
@@ -204,10 +203,10 @@ index 0000000000..cebb190ad1
 +	pinctrl-0 = <&eth_pins>;
 +	status = "okay";
 +};
-diff --git a/arch/mips/mach-mtmips/mt7621/Kconfig b/arch/mips/mach-mtmips/mt7621/Kconfig
-index 008a28f991..858a2b54f2 100644
---- a/arch/mips/mach-mtmips/mt7621/Kconfig
-+++ b/arch/mips/mach-mtmips/mt7621/Kconfig
+Index: u-boot-2024.10/arch/mips/mach-mtmips/mt7621/Kconfig
+===================================================================
+--- u-boot-2024.10.orig/arch/mips/mach-mtmips/mt7621/Kconfig
++++ u-boot-2024.10/arch/mips/mach-mtmips/mt7621/Kconfig
 @@ -99,6 +99,16 @@ config BOARD_MT7621_NAND_RFB
  	  sockets, 1 RGMII to external GbE PHY, 2 audio jacks (in/out),
  	  JTAG pins and expansion GPIO pins.
@@ -225,17 +224,16 @@ index 008a28f991..858a2b54f2 100644
  endchoice
  
  config SYS_CONFIG_NAME
-@@ -113,3 +123,5 @@ config SYS_VENDOR
+@@ -112,3 +122,5 @@ config SYS_VENDOR
  	default "mediatek" if BOARD_MT7621_RFB || BOARD_MT7621_NAND_RFB
  
  endif
 +
 +source "board/morsemicro/halowlink1/Kconfig"
-diff --git a/board/morsemicro/halowlink1/Kconfig b/board/morsemicro/halowlink1/Kconfig
-new file mode 100644
-index 0000000000..8d71961c73
+Index: u-boot-2024.10/board/morsemicro/halowlink1/Kconfig
+===================================================================
 --- /dev/null
-+++ b/board/morsemicro/halowlink1/Kconfig
++++ u-boot-2024.10/board/morsemicro/halowlink1/Kconfig
 @@ -0,0 +1,21 @@
 +if BOARD_MORSEMICRO_HALOWLINK1
 +
@@ -258,27 +256,24 @@ index 0000000000..8d71961c73
 +	default "morse_halowlink1_env"
 +
 +endif
-diff --git a/board/morsemicro/halowlink1/Makefile b/board/morsemicro/halowlink1/Makefile
-new file mode 100644
-index 0000000000..db129c5aba
+Index: u-boot-2024.10/board/morsemicro/halowlink1/Makefile
+===================================================================
 --- /dev/null
-+++ b/board/morsemicro/halowlink1/Makefile
++++ u-boot-2024.10/board/morsemicro/halowlink1/Makefile
 @@ -0,0 +1,3 @@
 +# SPDX-License-Identifier: GPL-2.0
 +
 +obj-y += board.o
-diff --git a/board/morsemicro/halowlink1/board.c b/board/morsemicro/halowlink1/board.c
-new file mode 100644
-index 0000000000..cec5940325
+Index: u-boot-2024.10/board/morsemicro/halowlink1/board.c
+===================================================================
 --- /dev/null
-+++ b/board/morsemicro/halowlink1/board.c
++++ u-boot-2024.10/board/morsemicro/halowlink1/board.c
 @@ -0,0 +1 @@
 +// SPDX-License-Identifier: GPL-2.0
-diff --git a/board/morsemicro/halowlink1/env b/board/morsemicro/halowlink1/env
-new file mode 100644
-index 0000000000..8e66f1b06d
+Index: u-boot-2024.10/board/morsemicro/halowlink1/env
+===================================================================
 --- /dev/null
-+++ b/board/morsemicro/halowlink1/env
++++ u-boot-2024.10/board/morsemicro/halowlink1/env
 @@ -0,0 +1,23 @@
 +ipaddr=192.168.12.1
 +serverip=192.168.12.2
@@ -304,11 +299,10 @@ index 0000000000..8e66f1b06d
 +reset_factory=mtd erase u-boot-env
 +nor_write_firmware=mtd erase firmware && mtd write firmware ${loadaddr}
 \ No newline at end of file
-diff --git a/configs/morsemicro_halowlink1_defconfig b/configs/morsemicro_halowlink1_defconfig
-new file mode 100644
-index 0000000000..8b69cceef9
+Index: u-boot-2024.10/configs/morsemicro_halowlink1_defconfig
+===================================================================
 --- /dev/null
-+++ b/configs/morsemicro_halowlink1_defconfig
++++ u-boot-2024.10/configs/morsemicro_halowlink1_defconfig
 @@ -0,0 +1,100 @@
 +CONFIG_MIPS=y
 +CONFIG_SYS_HAS_NONCACHED_MEMORY=y
@@ -319,6 +313,9 @@ index 0000000000..8b69cceef9
 +CONFIG_SF_DEFAULT_SPEED=20000000
 +CONFIG_ENV_SIZE=0x1000
 +CONFIG_SPL_SERIAL=y
++CONFIG_DM_SERIAL=y
++CONFIG_SERIAL_RX_BUFFER=y
++CONFIG_SERIAL_RX_BUFFER_SIZE=256
 +CONFIG_TPL_SYS_MALLOC_F_LEN=0x1000
 +CONFIG_SPL_SYS_MALLOC_F_LEN=0x40000
 +CONFIG_SPL=y
@@ -410,6 +407,3 @@ index 0000000000..8b69cceef9
 +CONFIG_LZMA=y
 +# CONFIG_GZIP is not set
 +CONFIG_SPL_LZMA=y
--- 
-2.25.1
-

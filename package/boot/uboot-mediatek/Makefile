@@ -64,10 +64,10 @@ define U-Boot/mt7621_rfb
   UBOOT_IMAGE:=u-boot-mt7621.bin
 endef
 
-define U-Boot/mt7621_morsemicro_artini
-  NAME:=MT7621 MorseMicro Artini
-  UBOOT_CONFIG:=morsemicro_artini
-  BUILD_DEVICES:=morse_artini
+define U-Boot/mt7621_morsemicro_halowlink1
+  NAME:=MT7621 MorseMicro HaLowLink 1
+  UBOOT_CONFIG:=morsemicro_halowlink1
+  BUILD_DEVICES:=morse_halowlink1
   BUILD_TARGET:=ramips
   BUILD_SUBTARGET:=mt7621
   UBOOT_IMAGE:=u-boot-mt7621.bin
@@ -574,7 +574,7 @@ endef
 UBOOT_TARGETS := \
 	mt7620_mt7530_rfb \
 	mt7620_rfb \
-	mt7621_morsemicro_artini \
+	mt7621_morsemicro_halowlink1 \
 	mt7621_nand_rfb \
 	mt7621_rfb \
 	mt7622_bananapi_bpi-r64-emmc \

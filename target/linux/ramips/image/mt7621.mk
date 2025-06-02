@@ -1686,23 +1686,24 @@ define Device/mikrotik_routerboard-m33g
 endef
 TARGET_DEVICES += mikrotik_routerboard-m33g
 
-define Device/morse_artini
+define Device/morse_halowlink1
   $(Device/dsa-migration)
   IMAGE_SIZE := 32448k
   UBOOT_OFFSET := 512k
-  UBOOT_TARGET := mt7621_morsemicro_artini
+  UBOOT_TARGET := mt7621_morsemicro_halowlink1
   UBOOT_IMAGE := u-boot.bin
   UBOOT_PATH := $(STAGING_DIR_IMAGE)/$$(UBOOT_TARGET)-$$(UBOOT_IMAGE)
   DEVICE_VENDOR := MorseMicro
-  DEVICE_MODEL := Artini
+  DEVICE_MODEL := HaLowLink 1
   # Generate openwrt-<vercode>-<model>-$1-$2
   # If $1=squashfs remove, likewise with $2=sysupgrade.bin, for simpler names.
-  # So a 'normal' Artini image will look like openwrt-morse-2.7.0-artini.bin
+  # So a 'normal' image will look like openwrt-morse-2.7.0-halowlink1.bin
   DEVICE_IMG_NAME = $(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(call sanitize,$$(DEVICE_MODEL))$$(if $$(filter-out squashfs,$$(1)),-$$(1),'')$$(if $$(filter-out sysupgrade.bin, $$(2)),-$$(2),.bin)
   DEVICE_PACKAGES := kmod-mmc-mt7620 kmod-mt7603 \
 	kmod-morse netifd-morse morse-fw-6108
+  SUPPORTED_DEVICES += morse,artini
 endef
-TARGET_DEVICES += morse_artini
+TARGET_DEVICES += morse_halowlink1
 
 define Device/mqmaker_witi
   $(Device/dsa-migration)

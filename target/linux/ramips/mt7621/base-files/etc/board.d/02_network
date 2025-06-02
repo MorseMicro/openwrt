@@ -158,7 +158,7 @@ ramips_setup_interfaces()
 	meig,slt866)
 		ucidef_set_interfaces_lan_wan "lan" "wan"
 		;;
-	morse,artini)
+	morse,halowlink1)
 		ucidef_set_interfaces_lan_wan "usblan lan" "wan"
 		;;
 	*)

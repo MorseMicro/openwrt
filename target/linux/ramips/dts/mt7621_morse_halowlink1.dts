@@ -7,7 +7,7 @@
 #include <dt-bindings/input/input.h>
 
 / {
-	compatible = "morse,artini", "mediatek,mt7621-soc";
+	compatible = "morse,halowlink1", "mediatek,mt7621-soc";
 	model = "MorseMicro HaLowLink 1";
 
 	aliases {

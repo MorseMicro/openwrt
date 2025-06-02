@@ -12,3 +12,5 @@ CONFIG_PACKAGE_luci-app-ekhwizards=y
 CONFIG_PACKAGE_kmod-morse=y
 CONFIG_PACKAGE_netifd-morse=y
 CONFIG_PACKAGE_morse-fw-8108=y
+CONFIG_PACKAGE_morse-fw-8108-tlm=y
+CONFIG_PACKAGE_morse-fw-8108-flm=y

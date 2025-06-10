@@ -1,0 +1,37 @@
+From 2304841e921a7c60c0421d6b3a094af94b408c8a Mon Sep 17 00:00:00 2001
+From: James Haggerty <james.haggerty@morsemicro.com>
+Date: Fri, 6 Jun 2025 10:34:01 +1000
+Subject: [PATCH] bridge: reset primary on adding device to empty bridge
+
+This means that when only wireless devices are on a bridge,
+the MAC is set to something predictable (otherwise a random
+MAC is used which differs on each bring-up).
+---
+ bridge.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/bridge.c b/bridge.c
+index 70ece78..7e67ede 100644
+--- a/bridge.c
++++ b/bridge.c
+@@ -778,13 +778,16 @@ bridge_member_cb(struct device_user *dep, enum device_event ev)
+ 		if (bridge_enable_member(bm))
+ 			break;
+ 
++		if (ev == DEV_EVENT_ADD && nst->n_present == 1) {
++			bridge_reset_primary(bst);
++		}
+ 		/*
+ 		 * Adding a bridge member can overwrite the bridge mtu
+ 		 * in the kernel, apply the bridge settings in case the
+ 		 * bridge mtu is set
+ 		 */
+ 		system_if_apply_settings(&bst->dev, &bst->dev.settings,
+-					 DEV_OPT_MTU | DEV_OPT_MTU6);
++					 DEV_OPT_MTU | DEV_OPT_MTU6 | DEV_OPT_MACADDR);
+ 		break;
+ 	case DEV_EVENT_LINK_UP:
+ 		if (!bst->has_vlans)
+-- 
+2.34.1
+

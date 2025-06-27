@@ -6,7 +6,7 @@
 include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/image.mk
 
-DEVICE_VARS += SYSINFO_MODEL SYSINFO_BOARD_NAME SPI_OVERLAY
+DEVICE_VARS += SYSINFO_MODEL SYSINFO_BOARD_NAME DISTROCONFIG_EXTRA
 
 FAT32_BLOCK_SIZE=1024
 FAT32_BLOCKS=$(shell echo $$(($(CONFIG_TARGET_KERNEL_PARTSIZE)*1024*1024/$(FAT32_BLOCK_SIZE))))
@@ -58,11 +58,10 @@ define Build/boot-ekh01
 	# Note that we cannot easily put it on the rootfs, because our multi-profile builds share this
 	# (i.e. they only differ in /boot).
 	# We can't easily use /boot directly because that's not mounted early in the preinit process.
-	# To support both MM610x and MM810x on SPI, each requiring a different
-	# device tree overlay, we have updated the SPI overlay configuration in
-	# `distroconfig` to apply the appropriate overlay based on the device variant.
+	# As well as this, we have a custom DISTROCONFIG_EXTRA section which is used to define
+	# the necessary SPI/SDIO overlays for the product.
 
-	echo -e '\ndtoverlay=sysinfo,board-name="$(SYSINFO_BOARD_NAME)",model="$(SYSINFO_MODEL)"\ndtoverlay=$(SPI_OVERLAY)' | cat boards/ekh01/distroconfig.txt - | mcopy -o -i $@.boot - ::/distroconfig.txt
+	echo -e '\ndtoverlay=sysinfo,board-name="$(SYSINFO_BOARD_NAME)",model="$(SYSINFO_MODEL)"' | cat boards/ekh01/distroconfig.txt boards/ekh01/distroconfig-$(DISTROCONFIG_EXTRA).txt - | mcopy -o -i $@.boot - ::/distroconfig.txt
 
 endef
 
@@ -191,75 +190,123 @@ ifeq ($(SUBTARGET),bcm2711)
   TARGET_DEVICES += rpi-4
 endif
 
-define Device/morse_ekh01
+define Device/rpi-4-mmeval
   $(Device/rpi-4)
+  DEVICE_VARIANT := (64bit) (Morse Micro Eval)
+  # remove the factory image (causes confusion)
+  IMAGES := sysupgrade.img.gz
+  IMAGE_PREFIX = $$(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(IMG_PREFIX_EXTRA)rpi-4-mmeval
+  DEVICE_IMG_NAME = $$(IMAGE_PREFIX)-$$(1)-$$(2)
+  DEVICE_PACKAGES += kmod-morse netifd-morse morse-fw-8108
+endef
+ifeq ($(SUBTARGET),bcm2711)
+  TARGET_DEVICES += rpi-4-mmeval
+endif
+
+define Device/morse_ekh01_base
+  $(Device/rpi-4)
+  SYSINFO_BOARD_NAME := $(subst _,$(comma),$(1))
+  SUPPORTED_DEVICES := $(SYSINFO_BOARD_NAME)
   DEVICE_VENDOR := MorseMicro
-  DEVICE_MODEL := MM6108-EKH01
-  DEVICE_VARIANT :=
-  # remove the factory image
+  # remove the factory image (causes confusion)
   IMAGES := sysupgrade.img.gz
   # Simplify by removing board and OpenWRT version.
-  IMAGE_PREFIX = $$(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(IMG_PREFIX_EXTRA)$$(call sanitize,$$(DEVICE_TITLE))
+  IMAGE_PREFIX = $$(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(IMG_PREFIX_EXTRA)$$(call sanitize,$$(DEVICE_MODEL)-$$(DEVICE_VARIANT))
   DEVICE_IMG_NAME = $$(IMAGE_PREFIX)-$$(1)-$$(2)
-  # This is very similar to DEVICE_TITLE, but we want to handle the 'variants' differently
-  # (i.e. EKH01v1 vs EKH01 v1, and EKH01-03 vs EKH01 03).
-  SYSINFO_MODEL := MorseMicro EKH01
-  # SYSINFO_BOARD_NAME will usually be the first entry in SUPPORTED_DEVICES,
-  # This is the name on device; SUPPORTED_DEVICES are the names in the metadata.
-  # SYSINFO_BOARD_NAME must be one of the names in SUPPORTED_DEVICES for upgrades
-  # to work.
-  SYSINFO_BOARD_NAME := morse,ekh01
-  SUPPORTED_DEVICES := morse,ekh01 morse,ekh01-05us
-  SPI_OVERLAY := mm610x-spi
   DEVICE_PACKAGES += kmod-morse netifd-morse morse-fw-6108 morse-fw-8108
   IMAGE/sysupgrade.img.gz := boot-common | boot-2711 | boot-ekh01 | sdcard-img | gzip | append-metadata
   IMAGE/factory.img.gz := boot-common | boot-2711 | boot-ekh01 | sdcard-img | gzip
 endef
+
+define Device/morse_mmx108-ekh01-sdio
+  $(Device/morse_ekh01_base)
+  DEVICE_MODEL := MMx108-EKH01
+  DEVICE_VARIANT := SDIO
+  SYSINFO_MODEL := $$(DEVICE_VENDOR) $$(DEVICE_MODEL) ($$(DEVICE_VARIANT))
+  # We allow upgrading to this from any of the legacy images,
+  # even those that will require BCF forcing (at least on
+  # an upgrade the BCF will remain set...).
+  SUPPORTED_DEVICES += morse,ekh01 morse,ekh01-01 morse,ekh01v1 morse,ekh01v2 morse,ekh01-03 morse,ekh01-05us
+  DISTROCONFIG_EXTRA := mmx10x-sdio
+endef
 ifeq ($(SUBTARGET),bcm2711)
-  TARGET_DEVICES += morse_ekh01
+  TARGET_DEVICES += morse_mmx108-ekh01-sdio
 endif
 
+define Device/morse_mm8108-ekh01-spi
+  $(Device/morse_ekh01_base)
+  DEVICE_MODEL := MM8108-EKH01
+  DEVICE_VARIANT := SPI
+  SYSINFO_MODEL := $$(DEVICE_VENDOR) $$(DEVICE_MODEL) ($$(DEVICE_VARIANT))
+  SUPPORTED_DEVICES += morse,ekh01 morse,ekh01-01
+  DISTROCONFIG_EXTRA := mm810x-spi
+endef
+ifeq ($(SUBTARGET),bcm2711)
+  TARGET_DEVICES += morse_mm8108-ekh01-spi
+endif
+
+define Device/morse_mm6108-ekh01-spi
+  $(Device/morse_ekh01_base)
+  DEVICE_MODEL := MM6108-EKH01
+  DEVICE_VARIANT := SPI
+  SYSINFO_MODEL := $$(DEVICE_VENDOR) $$(DEVICE_MODEL) ($$(DEVICE_VARIANT))
+  SUPPORTED_DEVICES += morse,ekh01 morse,ekh01v1 morse,ekh01v2 morse,ekh01-03 morse,ekh01-05us
+  DISTROCONFIG_EXTRA := mm610x-spi
+endef
+ifeq ($(SUBTARGET),bcm2711)
+  TARGET_DEVICES += morse_mm6108-ekh01-spi
+endif
+
+# Images below are legacy images for devices that don't have OTP bits set.
+# They do _not_ start with mmXXXX, and support both SDIO and SPI
+# (this means 5ghz WiFi is disabled, and errors will appear on probe).
+# We could elect not to produce these, and instead tell people to
+# set the BCF themselves, and above images can support upgrades
+# from these.
+
 define Device/morse_ekh01v1
-  $(Device/morse_ekh01)
+  $(Device/morse_ekh01_base)
+  DEVICE_MODEL := MM6108-EKH01
   DEVICE_VARIANT := v1
-  SYSINFO_MODEL := MorseMicro EKH01v1
-  SYSINFO_BOARD_NAME := morse,ekh01v1
-  SUPPORTED_DEVICES := morse,ekh01v1 morse,ekh01
+  SYSINFO_MODEL := $$(DEVICE_VENDOR) $$(DEVICE_MODEL)$$(DEVICE_VARIANT)
+  # Previously, the ekh01v1 was called the morse,ekh01.
+  # This is different from a later 'generic' image that was morse,ekh01
+  # (now superseded by morse,mmx108-ekh01-sdio etc. above).
+  SUPPORTED_DEVICES += morse,ekh01
+  DISTROCONFIG_EXTRA := mm610x-spi-and-sdio
 endef
 ifeq ($(SUBTARGET),bcm2711)
   TARGET_DEVICES += morse_ekh01v1
 endif
 
 define Device/morse_ekh01v2
-  $(Device/morse_ekh01)
+  $(Device/morse_ekh01_base)
+  DEVICE_MODEL := MM6108-EKH01
   DEVICE_VARIANT := v2
-  SYSINFO_MODEL := MorseMicro EKH01v2
-  SYSINFO_BOARD_NAME := morse,ekh01v2
-  SUPPORTED_DEVICES := morse,ekh01v2
+  SYSINFO_MODEL := $$(DEVICE_VENDOR) $$(DEVICE_MODEL)$$(DEVICE_VARIANT)
+  DISTROCONFIG_EXTRA := mm610x-spi-and-sdio
 endef
 ifeq ($(SUBTARGET),bcm2711)
   TARGET_DEVICES += morse_ekh01v2
 endif
 
 define Device/morse_ekh01-03
-  $(Device/morse_ekh01)
+  $(Device/morse_ekh01_base)
+  DEVICE_MODEL := MM6108-EKH01
   DEVICE_VARIANT := 03
-  SYSINFO_MODEL := MorseMicro EKH01-03
-  SYSINFO_BOARD_NAME := morse,ekh01-03
-  SUPPORTED_DEVICES := morse,ekh01-03
+  SYSINFO_MODEL := $$(DEVICE_VENDOR) $$(DEVICE_MODEL)-$$(DEVICE_VARIANT)
+  DISTROCONFIG_EXTRA := mm610x-spi-and-sdio
 endef
 ifeq ($(SUBTARGET),bcm2711)
   TARGET_DEVICES += morse_ekh01-03
 endif
 
 define Device/morse_ekh01-01
-  $(Device/morse_ekh01)
+  $(Device/morse_ekh01_base)
   DEVICE_MODEL := MM8108-EKH01
-  DEVICE_VARIANT := 01
-  SYSINFO_MODEL := MorseMicro EKH01-01
-  SYSINFO_BOARD_NAME := morse,ekh01-01
-  SUPPORTED_DEVICES := morse,ekh01-01
-  SPI_OVERLAY := mm810x-spi
+  DEVICE_VARIANT := 01-forcedbcf
+  SYSINFO_MODEL := $$(DEVICE_VENDOR) $$(DEVICE_MODEL)-$$(DEVICE_VARIANT)
+  DISTROCONFIG_EXTRA := mm810x-spi-and-sdio
 endef
 ifeq ($(SUBTARGET),bcm2711)
   TARGET_DEVICES += morse_ekh01-01

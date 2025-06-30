@@ -198,6 +198,7 @@ define Device/rpi-4-mmeval
   IMAGE_PREFIX = $$(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(IMG_PREFIX_EXTRA)rpi-4-mmeval
   DEVICE_IMG_NAME = $$(IMAGE_PREFIX)-$$(1)-$$(2)
   DEVICE_PACKAGES += kmod-morse netifd-morse morse-fw-8108
+  SUPPORTED_DEVICES += morse,ekh01-01
 endef
 ifeq ($(SUBTARGET),bcm2711)
   TARGET_DEVICES += rpi-4-mmeval
@@ -206,7 +207,7 @@ endif
 define Device/morse_ekh01_base
   $(Device/rpi-4)
   SYSINFO_BOARD_NAME := $(subst _,$(comma),$(1))
-  SUPPORTED_DEVICES := $(SYSINFO_BOARD_NAME)
+  SUPPORTED_DEVICES := $$(SYSINFO_BOARD_NAME)
   DEVICE_VENDOR := MorseMicro
   # remove the factory image (causes confusion)
   IMAGES := sysupgrade.img.gz

@@ -229,6 +229,21 @@ if VERSIONOPT
 			This is an URL to the manufacturer's website embedded in /etc/device_info
 			Useful for OEMs building OpenWrt based firmware
 
+	config VERSION_REPO_CUSTOM
+		string
+		prompt "Custom release repository URL"
+		help
+			This is a Custom release repository address embedded in the image.
+			Feeds listed in FEEDS_WITH_CUSTOM_REPO will use this repository instead of VERSION_REPO.
+
+	config FEEDS_WITH_CUSTOM_REPO
+		string
+		prompt "Feeds using the custom release repository"
+		help
+			Space-separated list of feed names that should use VERSION_REPO_CUSTOM
+			instead of default VERSION_REPO. Falls back to VERSION_REPO when
+			VERSION_REPO_CUSTOM is empty.
+
 	config VERSION_BUG_URL
 		string
 		prompt "Bug reporting URL"

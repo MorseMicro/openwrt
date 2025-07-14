@@ -232,6 +232,7 @@
 		reset-gpios = <&gpio 6 0>;
 		power-gpios = <&gpio 7 0>,
 		              <&gpio 8 0>;
+		fem-4v3-gpios = <&gpio 27 0>;
 		status = "okay";
 		reg = <2>;
 		bus-width = <4>;

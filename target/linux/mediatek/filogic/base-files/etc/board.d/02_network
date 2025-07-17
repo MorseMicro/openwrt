@@ -47,7 +47,8 @@ mediatek_setup_interfaces()
 		;;
 	cudy,m3000-v1|\
 	cudy,tr3000-v1|\
-	glinet,gl-mt3000)
+	glinet,gl-mt3000|\
+	morse,*ekh19*)
 		ucidef_set_interfaces_lan_wan eth1 eth0
 		;;
 	dlink,aquila-pro-ai-m30-a1)

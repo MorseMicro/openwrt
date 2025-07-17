@@ -86,7 +86,8 @@ xiaomi,redmi-router-ax6000-ubootmod)
 	ubootenv_add_uci_config "$envdev" "0x0" "0x1f000" "0x20000" "1"
 	ubootenv_add_uci_config "$envdev2" "0x0" "0x1f000" "0x20000" "1"
 	;;
-glinet,gl-mt3000)
+glinet,gl-mt3000|\
+morse,*ekh19*)
 	ubootenv_add_uci_config "/dev/mtd1" "0x0" "0x80000" "0x20000"
 	;;
 glinet,gl-mt6000)

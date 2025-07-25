@@ -472,7 +472,7 @@ define Device/morse_ekh19
   $(Device/glinet_gl-mt3000)
   DEVICE_VENDOR := MorseMicro
   DEVICE_MODEL := MM8108-EKH19
-  SUPPORTED_DEVICES += glinet,mt3000
+  SUPPORTED_DEVICES += glinet,gl-mt3000
   # Image name format : <openwrt>-<morse-x.x.x>-<morsemicro>-<mm8108-ekh19>-squashfs-sysupgrade.bin
   IMAGE_PREFIX = $$(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(IMG_PREFIX_EXTRA)$$(call sanitize,$$(DEVICE_TITLE))
   DEVICE_IMG_NAME = $$(IMAGE_PREFIX)-$$(1)-$$(2)

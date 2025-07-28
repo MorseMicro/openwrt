@@ -28,6 +28,10 @@ void wpas_ubus_free_bss(struct wpa_supplicant *wpa_s);
 void wpas_ubus_notify(struct wpa_supplicant *wpa_s, const struct wps_credential *cred);
 #endif
 
+#ifdef CONFIG_DPP3
+void wpas_ubus_notify_dpp_pb_result(struct wpa_supplicant *wpa_s, const char *status);
+#endif
+
 #else
 struct wpas_ubus_bss {};
 
@@ -40,6 +44,10 @@ static inline void wpas_ubus_free_bss(struct wpa_supplicant *wpa_s)
 }
 
 static inline void wpas_ubus_notify(struct wpa_supplicant *wpa_s, struct wps_credential *cred)
+{
+}
+
+static inline void wpas_ubus_notify_dpp_pb_result(struct wpa_supplicant *wpa_s, const char *status)
 {
 }
 

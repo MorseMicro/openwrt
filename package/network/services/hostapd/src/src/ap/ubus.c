@@ -15,6 +15,7 @@
 #include "hostapd.h"
 #include "neighbor_db.h"
 #include "wps_hostapd.h"
+#include "dpp_hostapd.h"
 #include "sta_info.h"
 #include "ubus.h"
 #include "ap_drv_ops.h"
@@ -621,6 +622,23 @@ hostapd_bss_wps_cancel(struct ubus_context *ctx, struct ubus_object *obj,
 	return 0;
 }
 #endif /* CONFIG_WPS */
+
+#ifdef CONFIG_DPP3
+hostapd_bss_dpp_push_button(struct ubus_context *ctx, struct ubus_object *obj,
+			    struct ubus_request_data *req, const char *method,
+			    struct blob_attr *msg)
+{
+	int rc;
+	struct hostapd_data *hapd = container_of(obj, struct hostapd_data, ubus.obj);
+
+	rc = hostapd_dpp_push_button(hapd, NULL);
+
+	if (rc != 0)
+		return UBUS_STATUS_NOT_SUPPORTED;
+
+	return 0;
+}
+#endif /* CONFIG_DPP3 */
 
 static int
 hostapd_bss_update_beacon(struct ubus_context *ctx, struct ubus_object *obj,
@@ -1630,6 +1648,9 @@ static const struct ubus_method bss_methods[] = {
 	UBUS_METHOD_NOARG("wps_status", hostapd_bss_wps_status),
 	UBUS_METHOD_NOARG("wps_cancel", hostapd_bss_wps_cancel),
 #endif
+#ifdef CONFIG_DPP3
+	UBUS_METHOD_NOARG("dpp_push_button", hostapd_bss_dpp_push_button),
+#endif
 	UBUS_METHOD_NOARG("update_beacon", hostapd_bss_update_beacon),
 	UBUS_METHOD_NOARG("get_features", hostapd_bss_get_features),
 #ifdef NEED_AP_MLME
@@ -1845,6 +1866,18 @@ int hostapd_ubus_handle_event(struct hostapd_data *hapd, struct hostapd_ubus_req
 
 	return WLAN_STATUS_SUCCESS;
 }
+
+#ifdef CONFIG_DPP3
+void hostapd_ubus_notify_dpp_pb_result(struct hostapd_data *hapd, const char *status)
+{
+	if (!hapd->ubus.obj.has_subscribers)
+		return;
+
+	blob_buf_init(&b, 0);
+	blobmsg_add_string(&b, "status", status);
+	ubus_notify(ctx, &hapd->ubus.obj, "dpp_pb_result", b.head, -1);
+}
+#endif
 
 void hostapd_ubus_notify(struct hostapd_data *hapd, const char *type, const u8 *addr)
 {

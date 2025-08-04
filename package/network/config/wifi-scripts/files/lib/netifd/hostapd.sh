@@ -323,6 +323,8 @@ hostapd_common_add_bss_config() {
 	config_add_string wps_device_type wps_device_name wps_manufacturer wps_pin
 	config_add_string multi_ap_backhaul_ssid multi_ap_backhaul_key
 
+	config_add_boolean dpp_configurator_connectivity
+
 	config_add_boolean wnm_sleep_mode wnm_sleep_mode_no_keys bss_transition mbo
 	config_add_int time_advertisement
 	config_add_string time_zone
@@ -601,6 +603,7 @@ hostapd_set_bss_options() {
 		maxassoc max_inactivity disassoc_low_ack isolate auth_cache \
 		wps_pushbutton wps_label ext_registrar wps_pbc_in_m1 wps_ap_setup_locked \
 		wps_independent wps_device_type wps_device_name wps_manufacturer wps_pin \
+		dpp_configurator_connectivity \
 		macfilter ssid utf8_ssid wmm uapsd hidden short_preamble rsn_preauth \
 		iapp_interface eapol_version dynamic_vlan ieee80211w nasid \
 		acct_secret acct_port acct_interval \
@@ -894,6 +897,10 @@ hostapd_set_bss_options() {
 			fi
 		}
 	}
+
+	set_default dpp_configurator_connectivity 1
+	/usr/sbin/hostapd -vdpp2 || dpp_configurator_connectivity=0
+	[ "$dpp_configurator_connectivity" -eq "1" ] && append bss_conf "dpp_configurator_connectivity=1" "$N"
 
 	append bss_conf "ssid=$ssid" "$N"
 	[ -n "$network_bridge" ] && append bss_conf "bridge=$network_bridge${N}wds_bridge=" "$N"

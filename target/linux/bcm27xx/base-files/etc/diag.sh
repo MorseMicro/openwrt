@@ -8,10 +8,8 @@
 set_state() {
 	case "$(board_name)" in
 	morse,ekh01 |\
-	morse,ekh01v1 |\
-	morse,ekh01v2 |\
-	morse,ekh01-03 |\
-	morse,ekh01-01 |\
+	morse,mm6108-ekh01-spi |\
+	morse,mm8108-ekh01-spi |\
 	raspberrypi,2-model-b |\
 	raspberrypi,2-model-b-rev2 |\
 	raspberrypi,3-model-b |\

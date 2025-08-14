@@ -59,7 +59,6 @@ keenetic,kn-1613)
 mediatek,linkit-smart-7688)
 	ucidef_set_led_wlan "wifi" "wifi" "orange:wifi" "phy0tpt"
 	;;
-morse,ekh03v3|\
 morse,ekh03v4|\
 morse,ekh04v6)
 	# There is a single RGB LED on this board. We want it to be green once booted,

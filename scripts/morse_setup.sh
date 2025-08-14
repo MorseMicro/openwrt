@@ -48,7 +48,7 @@ Usage:
                                     unless -e specifies an alternative toolchain path.
 
         eg.:
-            ${0} -i -b ekh03v3
+            ${0} -i -b ekh03v4
             ${0} -m -x dev -b ekh01
 
 EOF

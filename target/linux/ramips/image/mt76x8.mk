@@ -1074,13 +1074,6 @@ define Device/morse_ekh03
 	uboot-envtools
 endef
 
-define Device/morse_ekh03v3
-  $(Device/morse_ekh03)
-  DEVICE_VARIANT := v3
-  SUPPORTED_DEVICES := morse,ekh03v3 morse,ekh03-03
-endef
-TARGET_DEVICES += morse_ekh03v3
-
 define Device/morse_ekh03v4
   $(Device/morse_ekh03)
   DEVICE_VARIANT := v4

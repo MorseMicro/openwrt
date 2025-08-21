@@ -1,16 +1,18 @@
-From 1921df8ef92df0cc1db05ad7be2865961829ea3c Mon Sep 17 00:00:00 2001
+From e2047c74b287887e50fe4e24180a950637069bce Mon Sep 17 00:00:00 2001
 From: James Haggerty <james.haggerty@morsemicro.com>
-Date: Mon, 28 Jul 2025 10:33:05 +1000
+Date: Tue, 12 Aug 2025 15:41:59 +1000
 Subject: [PATCH] DPP: add ubus notifications when result happens
 
 This lets userspace react when DPP PB has finished.
 ---
- src/ap/dpp_hostapd.c            | 20 +++++++++++++++-----
- wpa_supplicant/dpp_supplicant.c | 23 ++++++++++++++++++-----
- 2 files changed, 33 insertions(+), 10 deletions(-)
+ src/ap/dpp_hostapd.c            | 37 ++++++++++++++++++++++--------
+ src/common/dpp.c                |  3 +++
+ src/common/dpp.h                |  1 +
+ wpa_supplicant/dpp_supplicant.c | 40 ++++++++++++++++++++++++++-------
+ 4 files changed, 64 insertions(+), 17 deletions(-)
 
 diff --git a/src/ap/dpp_hostapd.c b/src/ap/dpp_hostapd.c
-index 70dd18e25..f0018075b 100644
+index 70dd18e25..f86950789 100644
 --- a/src/ap/dpp_hostapd.c
 +++ b/src/ap/dpp_hostapd.c
 @@ -23,6 +23,7 @@
@@ -21,7 +23,38 @@ index 70dd18e25..f0018075b 100644
  
  
  static void hostapd_dpp_reply_wait_timeout(void *eloop_ctx, void *timeout_ctx);
-@@ -1609,12 +1610,15 @@ static void hostapd_dpp_rx_conf_result(struct hostapd_data *hapd, const u8 *src,
+@@ -1310,8 +1311,10 @@ static void hostapd_dpp_gas_resp_cb(void *ctx, const u8 *addr, u8 dialog_token,
+ 	}
+ #endif /* CONFIG_TESTING_OPTIONS */
+ fail:
+-	if (status != DPP_STATUS_OK)
++	if (status != DPP_STATUS_OK) {
+ 		wpa_msg(hapd->msg_ctx, MSG_INFO, DPP_EVENT_CONF_FAILED);
++		hostapd_ubus_notify_type(hapd, "dpp_conf_failed");
++	}
+ #ifdef CONFIG_DPP2
+ 	if (auth->peer_version >= 2 &&
+ 	    auth->conf_resp_status == DPP_STATUS_OK) {
+@@ -1492,6 +1495,7 @@ static void hostapd_dpp_config_result_wait_timeout(void *eloop_ctx,
+ 	wpa_printf(MSG_DEBUG,
+ 		   "DPP: Timeout while waiting for Configuration Result");
+ 	wpa_msg(hapd->msg_ctx, MSG_INFO, DPP_EVENT_CONF_FAILED);
++	hostapd_ubus_notify_type(hapd, "dpp_conf_failed");
+ 	dpp_auth_deinit(auth);
+ 	hapd->dpp_auth = NULL;
+ }
+@@ -1601,20 +1605,25 @@ static void hostapd_dpp_rx_conf_result(struct hostapd_data *hapd, const u8 *src,
+ 	if (status == DPP_STATUS_OK)
+ 		wpa_msg(hapd->msg_ctx, MSG_INFO, DPP_EVENT_CONF_SENT
+ 			"conf_status=%d", auth->conf_resp_status);
+-	else
++	else {
+ 		wpa_msg(hapd->msg_ctx, MSG_INFO, DPP_EVENT_CONF_FAILED);
++		hostapd_ubus_notify_type(hapd, "dpp_conf_failed");
++	}
+ 	dpp_auth_deinit(auth);
+ 	hapd->dpp_auth = NULL;
+ 	eloop_cancel_timeout(hostapd_dpp_config_result_wait_timeout, hapd,
  			     NULL);
  #ifdef CONFIG_DPP3
  	if (!ifaces->dpp_pb_result_indicated && hostapd_dpp_pb_active(hapd)) {
@@ -39,7 +72,7 @@ index 70dd18e25..f0018075b 100644
  		ifaces->dpp_pb_result_indicated = true;
  		if (status == DPP_STATUS_OK)
  			hostapd_dpp_remove_pb_hash(hapd);
-@@ -2616,6 +2620,7 @@ hostapd_dpp_rx_pb_presence_announcement(struct hostapd_data *hapd,
+@@ -2616,6 +2625,7 @@ hostapd_dpp_rx_pb_presence_announcement(struct hostapd_data *hapd,
  				wpa_msg(hapd->msg_ctx, MSG_INFO,
  					DPP_EVENT_PB_RESULT "session-overlap");
  				ifaces->dpp_pb_result_indicated = true;
@@ -47,7 +80,28 @@ index 70dd18e25..f0018075b 100644
  			}
  			hostapd_dpp_push_button_stop(hapd);
  			return;
-@@ -3154,12 +3159,15 @@ void hostapd_dpp_gas_status_handler(struct hostapd_data *hapd, int ok)
+@@ -3100,8 +3110,10 @@ hostapd_dpp_gas_req_handler(struct hostapd_data *hapd, const u8 *sa,
+ 	wpa_msg(hapd->msg_ctx, MSG_INFO, DPP_EVENT_CONF_REQ_RX "src=" MACSTR,
+ 		MAC2STR(sa));
+ 	resp = dpp_conf_req_rx(auth, query, query_len);
+-	if (!resp)
++	if (!resp) {
+ 		wpa_msg(hapd->msg_ctx, MSG_INFO, DPP_EVENT_CONF_FAILED);
++		hostapd_ubus_notify_type(hapd, "dpp_conf_failed");
++	}
+ 	return resp;
+ }
+ 
+@@ -3148,18 +3160,23 @@ void hostapd_dpp_gas_status_handler(struct hostapd_data *hapd, int ok)
+ 	if (ok)
+ 		wpa_msg(hapd->msg_ctx, MSG_INFO, DPP_EVENT_CONF_SENT
+ 			"conf_status=%d", auth->conf_resp_status);
+-	else
++	else {
+ 		wpa_msg(hapd->msg_ctx, MSG_INFO, DPP_EVENT_CONF_FAILED);
++		hostapd_ubus_notify_type(hapd, "dpp_conf_failed");
++	}
+ 	dpp_auth_deinit(hapd->dpp_auth);
  	hapd->dpp_auth = NULL;
  #ifdef CONFIG_DPP3
  	if (!ifaces->dpp_pb_result_indicated && hostapd_dpp_pb_active(hapd)) {
@@ -65,7 +119,7 @@ index 70dd18e25..f0018075b 100644
  		ifaces->dpp_pb_result_indicated = true;
  		if (ok)
  			hostapd_dpp_remove_pb_hash(hapd);
-@@ -3938,9 +3946,11 @@ void hostapd_dpp_push_button_stop(struct hostapd_data *hapd)
+@@ -3938,9 +3955,11 @@ void hostapd_dpp_push_button_stop(struct hostapd_data *hapd)
  	eloop_cancel_timeout(hostapd_dpp_push_button_expire, hapd, NULL);
  	if (hostapd_dpp_pb_active(hapd)) {
  		wpa_printf(MSG_DEBUG, "DPP: Stop active push button mode");
@@ -78,8 +132,41 @@ index 70dd18e25..f0018075b 100644
  	}
  	ifaces->dpp_pb_time.sec = 0;
  	ifaces->dpp_pb_time.usec = 0;
+diff --git a/src/common/dpp.c b/src/common/dpp.c
+index 3b9f35e8d..e138fa2b7 100644
+--- a/src/common/dpp.c
++++ b/src/common/dpp.c
+@@ -1470,6 +1470,7 @@ void dpp_auth_deinit(struct dpp_authentication *auth)
+ 		struct dpp_config_obj *conf = &auth->conf_obj[i];
+ 
+ 		os_free(conf->connector);
++		os_free(conf->conf_obj);
+ 		wpabuf_free(conf->c_sign_key);
+ 		wpabuf_free(conf->certbag);
+ 		wpabuf_free(conf->certs);
+@@ -3213,6 +3214,8 @@ static int dpp_parse_conf_obj(struct dpp_authentication *auth,
+ 	}
+ 	conf = &auth->conf_obj[auth->num_conf_obj++];
+ 
++	conf->conf_obj = os_strdup((const char *) conf_obj);
++
+ 	if (ssid64) {
+ 		conf->ssid_len = wpabuf_len(ssid64);
+ 		os_memcpy(conf->ssid, wpabuf_head(ssid64), conf->ssid_len);
+diff --git a/src/common/dpp.h b/src/common/dpp.h
+index 0f843da6a..4635bdae0 100644
+--- a/src/common/dpp.h
++++ b/src/common/dpp.h
+@@ -351,6 +351,7 @@ struct dpp_authentication {
+ 	int provision_configurator;
+ 	struct dpp_configurator *conf;
+ 	struct dpp_config_obj {
++		char *conf_obj; /* raw JSON of config object */
+ 		char *connector; /* received signedConnector */
+ 		u8 ssid[SSID_MAX_LEN];
+ 		u8 ssid_len;
 diff --git a/wpa_supplicant/dpp_supplicant.c b/wpa_supplicant/dpp_supplicant.c
-index afadd789f..d255fb64b 100644
+index afadd789f..d22f62948 100644
 --- a/wpa_supplicant/dpp_supplicant.c
 +++ b/wpa_supplicant/dpp_supplicant.c
 @@ -29,6 +29,7 @@
@@ -90,7 +177,16 @@ index afadd789f..d255fb64b 100644
  
  
  static int wpas_dpp_listen_start(struct wpa_supplicant *wpa_s,
-@@ -1638,6 +1639,7 @@ static int wpas_dpp_handle_config_obj(struct wpa_supplicant *wpa_s,
+@@ -1525,6 +1526,8 @@ static int wpas_dpp_handle_config_obj(struct wpa_supplicant *wpa_s,
+ 				      struct dpp_authentication *auth,
+ 				      struct dpp_config_obj *conf)
+ {
++	wpas_ubus_notify_dpp_conf_received(wpa_s, conf);
++
+ 	wpa_msg(wpa_s, MSG_INFO, DPP_EVENT_CONF_RECEIVED);
+ 	wpa_msg(wpa_s, MSG_INFO, DPP_EVENT_CONFOBJ_AKM "%s",
+ 		dpp_akm_str(conf->akm));
+@@ -1638,6 +1641,7 @@ static int wpas_dpp_handle_config_obj(struct wpa_supplicant *wpa_s,
  #ifdef CONFIG_DPP3
  	if (!wpa_s->dpp_pb_result_indicated) {
  		wpa_msg(wpa_s, MSG_INFO, DPP_EVENT_PB_RESULT "success");
@@ -98,7 +194,45 @@ index afadd789f..d255fb64b 100644
  		wpa_s->dpp_pb_result_indicated = true;
  	}
  
-@@ -2157,12 +2159,15 @@ static void wpas_dpp_rx_conf_result(struct wpa_supplicant *wpa_s, const u8 *src,
+@@ -1800,8 +1804,10 @@ static void wpas_dpp_gas_resp_cb(void *ctx, const u8 *addr, u8 dialog_token,
+ 	}
+ #endif /* CONFIG_TESTING_OPTIONS */
+ fail:
+-	if (status != DPP_STATUS_OK)
++	if (status != DPP_STATUS_OK) {
+ 		wpa_msg(wpa_s, MSG_INFO, DPP_EVENT_CONF_FAILED);
++		wpas_ubus_notify_type(wpa_s, "dpp_conf_failed");
++	}
+ #ifdef CONFIG_DPP2
+ 	if (auth->peer_version >= 2 &&
+ 	    auth->conf_resp_status == DPP_STATUS_OK) {
+@@ -1847,6 +1853,7 @@ static void wpas_dpp_gas_client_timeout(void *eloop_ctx, void *timeout_ctx)
+ 
+ 	wpa_printf(MSG_DEBUG, "DPP: Timeout while waiting for Config Response");
+ 	wpa_msg(wpa_s, MSG_INFO, DPP_EVENT_CONF_FAILED);
++	wpas_ubus_notify_type(wpa_s, "dpp_conf_failed");
+ 	dpp_auth_deinit(wpa_s->dpp_auth);
+ 	wpa_s->dpp_auth = NULL;
+ }
+@@ -2028,6 +2035,7 @@ static void wpas_dpp_config_result_wait_timeout(void *eloop_ctx,
+ 	wpa_printf(MSG_DEBUG,
+ 		   "DPP: Timeout while waiting for Configuration Result");
+ 	wpa_msg(wpa_s, MSG_INFO, DPP_EVENT_CONF_FAILED);
++	wpas_ubus_notify_type(wpa_s, "dpp_conf_failed");
+ 	dpp_auth_deinit(auth);
+ 	wpa_s->dpp_auth = NULL;
+ }
+@@ -2150,19 +2158,24 @@ static void wpas_dpp_rx_conf_result(struct wpa_supplicant *wpa_s, const u8 *src,
+ 	if (status == DPP_STATUS_OK)
+ 		wpa_msg(wpa_s, MSG_INFO, DPP_EVENT_CONF_SENT "conf_status=%d",
+ 			auth->conf_resp_status);
+-	else
++	else {
+ 		wpa_msg(wpa_s, MSG_INFO, DPP_EVENT_CONF_FAILED);
++		wpas_ubus_notify_type(wpa_s, "dpp_conf_failed");
++	}
+ 	dpp_auth_deinit(auth);
+ 	wpa_s->dpp_auth = NULL;
  	eloop_cancel_timeout(wpas_dpp_config_result_wait_timeout, wpa_s, NULL);
  #ifdef CONFIG_DPP3
  	if (!wpa_s->dpp_pb_result_indicated && wpas_dpp_pb_active(wpa_s)) {
@@ -116,7 +250,7 @@ index afadd789f..d255fb64b 100644
  		wpa_s->dpp_pb_result_indicated = true;
  		if (status == DPP_STATUS_OK)
  			wpas_dpp_remove_pb_hash(wpa_s);
-@@ -3444,6 +3449,7 @@ wpas_dpp_rx_pb_presence_announcement(struct wpa_supplicant *wpa_s,
+@@ -3444,6 +3457,7 @@ wpas_dpp_rx_pb_presence_announcement(struct wpa_supplicant *wpa_s,
  			    wpas_dpp_pb_active(wpa_s)) {
  				wpa_msg(wpa_s, MSG_INFO,
  					DPP_EVENT_PB_RESULT "session-overlap");
@@ -124,7 +258,7 @@ index afadd789f..d255fb64b 100644
  				wpa_s->dpp_pb_result_indicated = true;
  			}
  			wpas_dpp_push_button_stop(wpa_s);
-@@ -3597,6 +3603,7 @@ skip_hash_check:
+@@ -3597,6 +3611,7 @@ skip_hash_check:
  		if (!wpa_s->dpp_pb_result_indicated) {
  			wpa_msg(wpa_s, MSG_INFO, DPP_EVENT_PB_RESULT
  				"session-overlap");
@@ -132,7 +266,25 @@ index afadd789f..d255fb64b 100644
  			wpa_s->dpp_pb_result_indicated = true;
  		}
  		wpas_dpp_push_button_stop(wpa_s);
-@@ -4225,12 +4232,15 @@ wpas_dpp_gas_status_handler(void *ctx, struct wpabuf *resp, int ok)
+@@ -4151,6 +4166,7 @@ wpas_dpp_gas_req_handler(void *ctx, void *resp_ctx, const u8 *sa,
+ 	auth->conf_resp = resp;
+ 	if (!resp) {
+ 		wpa_msg(wpa_s, MSG_INFO, DPP_EVENT_CONF_FAILED);
++		wpas_ubus_notify_type(wpa_s, "dpp_conf_failed");
+ 		dpp_auth_deinit(wpa_s->dpp_auth);
+ 		wpa_s->dpp_auth = NULL;
+ 	}
+@@ -4218,19 +4234,24 @@ wpas_dpp_gas_status_handler(void *ctx, struct wpabuf *resp, int ok)
+ 	if (ok)
+ 		wpa_msg(wpa_s, MSG_INFO, DPP_EVENT_CONF_SENT "conf_status=%d",
+ 			auth->conf_resp_status);
+-	else
++	else {
+ 		wpa_msg(wpa_s, MSG_INFO, DPP_EVENT_CONF_FAILED);
++		wpas_ubus_notify_type(wpa_s, "dpp_conf_failed");
++	}
+ 	dpp_auth_deinit(wpa_s->dpp_auth);
+ 	wpa_s->dpp_auth = NULL;
  	wpabuf_free(resp);
  #ifdef CONFIG_DPP3
  	if (!wpa_s->dpp_pb_result_indicated && wpas_dpp_pb_active(wpa_s)) {
@@ -150,7 +302,7 @@ index afadd789f..d255fb64b 100644
  		wpa_s->dpp_pb_result_indicated = true;
  		if (ok)
  			wpas_dpp_remove_pb_hash(wpa_s);
-@@ -5605,6 +5615,7 @@ void wpas_dpp_push_button_stop(struct wpa_supplicant *wpa_s)
+@@ -5605,6 +5626,7 @@ void wpas_dpp_push_button_stop(struct wpa_supplicant *wpa_s)
  		wpa_s->dpp_pb_bi = NULL;
  		if (!wpa_s->dpp_pb_result_indicated) {
  			wpa_msg(wpa_s, MSG_INFO, DPP_EVENT_PB_RESULT "failed");
@@ -158,7 +310,7 @@ index afadd789f..d255fb64b 100644
  			wpa_s->dpp_pb_result_indicated = true;
  		}
  	}
-@@ -5619,8 +5630,10 @@ void wpas_dpp_push_button_stop(struct wpa_supplicant *wpa_s)
+@@ -5619,8 +5641,10 @@ void wpas_dpp_push_button_stop(struct wpa_supplicant *wpa_s)
  	eloop_cancel_timeout(wpas_dpp_push_button_expire, wpa_s, NULL);
  	if (wpas_dpp_pb_active(wpa_s)) {
  		wpa_printf(MSG_DEBUG, "DPP: Stop active push button mode");

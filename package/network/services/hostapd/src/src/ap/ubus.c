@@ -624,14 +624,27 @@ hostapd_bss_wps_cancel(struct ubus_context *ctx, struct ubus_object *obj,
 #endif /* CONFIG_WPS */
 
 #ifdef CONFIG_DPP3
+enum {
+	DPP_PUSH_BUTTON_COMMAND,
+	__DPP_PUSH_BUTTON_MAX
+};
+
+static const struct blobmsg_policy dpp_push_button_policy[__DPP_PUSH_BUTTON_MAX] = {
+	[DPP_PUSH_BUTTON_COMMAND] = { "command", BLOBMSG_TYPE_STRING },
+};
+
+static int
 hostapd_bss_dpp_push_button(struct ubus_context *ctx, struct ubus_object *obj,
 			    struct ubus_request_data *req, const char *method,
 			    struct blob_attr *msg)
 {
 	int rc;
+	struct blob_attr *tb[__DPP_PUSH_BUTTON_MAX];
 	struct hostapd_data *hapd = container_of(obj, struct hostapd_data, ubus.obj);
 
-	rc = hostapd_dpp_push_button(hapd, NULL);
+	blobmsg_parse(dpp_push_button_policy, __DPP_PUSH_BUTTON_MAX, tb, blob_data(msg), blob_len(msg));
+
+	rc = hostapd_dpp_push_button(hapd, tb[DPP_PUSH_BUTTON_COMMAND] ? blobmsg_data(tb[DPP_PUSH_BUTTON_COMMAND]) : NULL);
 
 	if (rc != 0)
 		return UBUS_STATUS_NOT_SUPPORTED;
@@ -1650,7 +1663,7 @@ static const struct ubus_method bss_methods[] = {
 	UBUS_METHOD_NOARG("wps_cancel", hostapd_bss_wps_cancel),
 #endif
 #ifdef CONFIG_DPP3
-	UBUS_METHOD_NOARG("dpp_push_button", hostapd_bss_dpp_push_button),
+	UBUS_METHOD("dpp_push_button", hostapd_bss_dpp_push_button, dpp_push_button_policy),
 #endif
 	UBUS_METHOD_NOARG("update_beacon", hostapd_bss_update_beacon),
 	UBUS_METHOD_NOARG("get_features", hostapd_bss_get_features),
@@ -1867,6 +1880,14 @@ int hostapd_ubus_handle_event(struct hostapd_data *hapd, struct hostapd_ubus_req
 		return ureq.resp;
 
 	return WLAN_STATUS_SUCCESS;
+}
+
+void hostapd_ubus_notify_type(struct hostapd_data *hapd, const char *type)
+{
+	if (!hapd->ubus.obj.has_subscribers)
+		return;
+
+	ubus_notify(ctx, &hapd->ubus.obj, type, NULL, -1);
 }
 
 #ifdef CONFIG_DPP3

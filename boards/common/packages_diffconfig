@@ -126,3 +126,5 @@ CONFIG_BUSYBOX_CONFIG_I2CTRANSFER=y
 # IPv6 router settings aren't correctly handled in our UI
 # and odhcpd throws several errors. Temporarily disable.
 CONFIG_PACKAGE_odhcpd-ipv6only=n
+
+CONFIG_DPP_SUPPORT=y

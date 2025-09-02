@@ -1698,7 +1698,7 @@ define Device/morse_halowlink1
   # Generate openwrt-<vercode>-<model>-$1-$2
   # If $1=squashfs remove, likewise with $2=sysupgrade.bin, for simpler names.
   # So a 'normal' image will look like openwrt-morse-2.7.0-halowlink1.bin
-  DEVICE_IMG_NAME = $(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(call sanitize,$$(DEVICE_MODEL))$$(if $$(filter-out squashfs,$$(1)),-$$(1),'')$$(if $$(filter-out sysupgrade.bin, $$(2)),-$$(2),.bin)
+  DEVICE_IMG_NAME = $(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(call sanitize,$$(DEVICE_MODEL))$$(if $$(filter-out squashfs,$$(1)),-$$(1))$$(if $$(filter-out sysupgrade.bin, $$(2)),-$$(2),.bin)
   DEVICE_PACKAGES := kmod-mmc-mt7620 kmod-mt7603 \
 	kmod-morse netifd-morse morse-fw-6108
   SUPPORTED_DEVICES += morse,artini
@@ -1710,7 +1710,7 @@ define Device/morse_halowlink2
   IMAGE_SIZE := 32448k
   DEVICE_VENDOR := MorseMicro
   DEVICE_MODEL := HaLowLink 2
-  DEVICE_IMG_NAME = $(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(call sanitize,$$(DEVICE_MODEL))$$(if $$(filter-out squashfs,$$(1)),-$$(1),'')$$(if $$(filter-out sysupgrade.bin, $$(2)),-$$(2),.bin)
+  DEVICE_IMG_NAME = $(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(call sanitize,$$(DEVICE_MODEL))$$(if $$(filter-out squashfs,$$(1)),-$$(1))$$(if $$(filter-out sysupgrade.bin, $$(2)),-$$(2),.bin)
   DEVICE_PACKAGES := kmod-mmc-mt7620 kmod-mt7603 \
 	kmod-morse netifd-morse morse-fw-8108
 endef

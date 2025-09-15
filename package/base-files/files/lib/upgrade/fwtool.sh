@@ -1,6 +1,12 @@
 fwtool_check_signature() {
 	[ $# -gt 1 ] && return 1
 
+	# Check if signature enforcement is enabled in UCI
+	enforce_fw_sign="$(uci -q get system.@system[0].enforce_fw_sign || echo 0)"
+	if [ "$enforce_fw_sign" = "1" ] && [ "$REQUIRE_IMAGE_SIGNATURE" != "1" ]; then
+		REQUIRE_IMAGE_SIGNATURE=1
+	fi
+
 	[ ! -x /usr/bin/ucert ] && {
 		if [ "$REQUIRE_IMAGE_SIGNATURE" = 1 ]; then
 			return 1

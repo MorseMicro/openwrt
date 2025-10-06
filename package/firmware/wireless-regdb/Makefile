@@ -24,11 +24,36 @@ endef
 
 define Build/Compile
 	$(STAGING_DIR_HOST)/bin/$(PYTHON) $(PKG_BUILD_DIR)/db2fw.py $(PKG_BUILD_DIR)/regulatory.db $(PKG_BUILD_DIR)/db.txt
+
+ifneq ($(call qstrip,$(CONFIG_WIRELESS_REGDB_FILTERED)),)
+	# Generate region-specific filtered regdbs
+	for region in $(call qstrip,$(CONFIG_WIRELESS_REGDB_FILTERED)); do \
+		name=$$$${region%%:*}; \
+		keep=$$$${region#*:}; \
+		$(PKG_BUILD_DIR)/filter_regdb.awk -v KEEP=$$$$keep $(PKG_BUILD_DIR)/db.txt > $(PKG_BUILD_DIR)/db_filtered.txt; \
+		$(STAGING_DIR_HOST)/bin/$(PYTHON) $(PKG_BUILD_DIR)/db2fw.py \
+			$(PKG_BUILD_DIR)/mm_region_$$$${name}_regulatory.db $(PKG_BUILD_DIR)/db_filtered.txt; \
+	done
+endif
+endef
+
+define Package/wireless-regdb/config
+if PACKAGE_wireless-regdb
+	config WIRELESS_REGDB_FILTERED
+		string "Filtered regdbs to enable region locking"
+		default ""
+		help
+			This allows us to generate separate regdbs for /lib/firmware
+			with a limited set of countries, allowing region restriction.
+			e.g. WIRELESS_REGDB_FILTERED=EU:DE,FR US:US
+			will generate mm_region_EU_regulatory.db containing 00/DE/FR
+			and mm_region_US_regulatory.db containing 00/US
+endif
 endef
 
 define Package/wireless-regdb/install
 	$(INSTALL_DIR) $(1)/lib/firmware
-	$(CP) $(PKG_BUILD_DIR)/regulatory.db $(1)/lib/firmware/
+	$(CP) $(PKG_BUILD_DIR)/*regulatory.db $(1)/lib/firmware/
 endef
 
 $(eval $(call BuildPackage,wireless-regdb))

@@ -17,6 +17,11 @@ usage(){
 This MorseMicro script provides help automating the initialization of OpenWRT build.
 Make sure you run this script from the top directory of OpenWRT!
 
+NB If you want to put toolchains/downloads in a common location so they can
+be shared between checkouts of the repository, do:
+
+    sudo mkdir -p /opt/openwrt && sudo chown -R "$(id -u):$(id -g)"
+
 Usage:
     ${0} <options>
         options:
@@ -42,10 +47,12 @@ Usage:
 
             -e <toolchain_path>     use the toolchain specified at <toolchain_path>
 
-            -E                      identifies the architecture of the selected board, and
-                                    downloads a toolchain from the configured VERSION_REPO.
-                                    By default, the toolchain will be extracted to /opt
-                                    unless -e specifies an alternative toolchain path.
+            -E                      automatically download and use a toolchain from VERSION_REPO;
+                                    if the toolchain already exists at the specified location, it won't
+                                    be redownloaded. By default, it will look in /opt/openwrt
+                                    (+ correct architecture), unless -e specifies a different path.
+                                    If you wish to use an already downloaded toolchain with a later
+                                    run of morse_setup.sh, you should specify -E again.
 
         eg.:
             ${0} -i -b ekh03v4
@@ -103,8 +110,8 @@ download_toolchain(){
         SUB_FOLDER="${toolchain_archive}/toolchain-${arch}${arch_suffix}_gcc-${gcc_vers}_${libc}${libc_suffix}"
         TOOLCHAIN_PATH=${INSTALL_PATH}
     else
-        INSTALL_PATH="/opt"
-        TOOLCHAIN_PATH="/opt/${toolchain_archive}/toolchain-${arch}${arch_suffix}_gcc-${gcc_vers}_${libc}${libc_suffix}"
+        INSTALL_PATH="/opt/openwrt"
+        TOOLCHAIN_PATH="${INSTALL_PATH}/${toolchain_archive}/toolchain-${arch}${arch_suffix}_gcc-${gcc_vers}_${libc}${libc_suffix}"
         SUB_FOLDER=""
         TAR_STRIP=""
     fi
@@ -267,6 +274,10 @@ case "${MODE}" in
         done
 
         (
+            if [ -w /opt/openwrt ]; then
+                echo 'CONFIG_DOWNLOAD_FOLDER="/opt/openwrt/dl"'
+            fi
+
             for f in ./boards/common/*_diffconfig; do
                 cat "$f"; echo
             done

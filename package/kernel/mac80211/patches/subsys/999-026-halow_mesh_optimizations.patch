@@ -416,7 +416,7 @@ Index: backports-6.1.145-1/net/wireless/mesh.c
 +#define MESH_DIAM_TRAVERSAL_TIME 200
  
 -#define MESH_RSSI_THRESHOLD	0
-+#define MESH_RSSI_THRESHOLD	-85
++#define MESH_RSSI_THRESHOLD	-80
  
  /*
   * A path will be refreshed if it is used PATH_REFRESH_TIME milliseconds
@@ -435,12 +435,3 @@ Index: backports-6.1.145-1/net/wireless/mesh.c
  
  #define MESH_SYNC_NEIGHBOR_OFFSET_MAX 50
  
-@@ -82,7 +82,7 @@ const struct mesh_config default_mesh_co
- 	.power_mode = NL80211_MESH_POWER_ACTIVE,
- 	.dot11MeshAwakeWindowDuration = MESH_DEFAULT_AWAKE_WINDOW,
- 	.plink_timeout = MESH_DEFAULT_PLINK_TIMEOUT,
--	.dot11MeshNolearn = false,
-+	.dot11MeshNolearn = true,
- };
- 
- const struct mesh_setup default_mesh_setup = {

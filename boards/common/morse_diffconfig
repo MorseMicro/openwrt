@@ -9,6 +9,6 @@ CONFIG_VERSION_MANUFACTURER_URL="https://www.morsemicro.com/"
 CONFIG_VERSION_REPO_CUSTOM="https://repo.apps.morsemicro.com/openwrt/releases"
 CONFIG_FEEDS_WITH_CUSTOM_REPO="core morse% prpl matter"
 CONFIG_VERSION_CODE_FILENAMES=y
-CONFIG_VERSION_CODE="Morse-2.11-dev"
+CONFIG_VERSION_CODE="Morse-2.12-dev"
 # Disable ext4 image creation.
 CONFIG_TARGET_ROOTFS_EXT4FS=n

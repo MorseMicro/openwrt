@@ -1,6 +1,8 @@
+diff --git a/net/mac80211/cfg.c b/net/mac80211/cfg.c
+index f1c08b4..9986730 100644
 --- a/net/mac80211/cfg.c
 +++ b/net/mac80211/cfg.c
-@@ -2012,6 +2012,10 @@ static int ieee80211_add_station(struct
+@@ -2041,6 +2041,10 @@ static int ieee80211_add_station(struct wiphy *wiphy, struct net_device *dev,
  		return err;
  	}
  
@@ -11,6 +13,23 @@
  	/*
  	 * for TDLS and for unassociated station, rate control should be
  	 * initialized only when rates are known and station is marked
+diff --git a/net/mac80211/ieee80211_i.h b/net/mac80211/ieee80211_i.h
+index 8f56741..74fc4cb 100644
+--- a/net/mac80211/ieee80211_i.h
++++ b/net/mac80211/ieee80211_i.h
+@@ -738,6 +738,10 @@ struct ieee80211_if_mesh {
+ 	struct mesh_table mpp_paths; /* Store paths for MPP&MAP */
+ 	int mesh_paths_generation;
+ 	int mpp_paths_generation;
++	enum {
++		IEEE80211_MESH_MFP_DISABLED,
++		IEEE80211_MESH_MFP_ENABLED,
++	} mfp; /* management frame protection */
+ };
+ 
+ #ifdef CPTCFG_MAC80211_MESH
+diff --git a/net/mac80211/mesh.c b/net/mac80211/mesh.c
+index dd75e0a..542e1cd 100644
 --- a/net/mac80211/mesh.c
 +++ b/net/mac80211/mesh.c
 @@ -1556,6 +1556,19 @@ out:
@@ -33,9 +52,11 @@
  static void mesh_bss_info_changed(struct ieee80211_sub_if_data *sdata)
  {
  	struct ieee80211_if_mesh *ifmsh = &sdata->u.mesh;
+diff --git a/net/mac80211/mesh.h b/net/mac80211/mesh.h
+index 6e295f9..99dc3f6 100644
 --- a/net/mac80211/mesh.h
 +++ b/net/mac80211/mesh.h
-@@ -339,12 +339,15 @@ static inline bool mesh_path_sel_is_hwmp
+@@ -339,12 +339,15 @@ static inline bool mesh_path_sel_is_hwmp(struct ieee80211_sub_if_data *sdata)
  void mesh_path_flush_by_iface(struct ieee80211_sub_if_data *sdata);
  void mesh_sync_adjust_tsf(struct ieee80211_sub_if_data *sdata);
  void ieee80211s_stop(void);
@@ -51,9 +72,11 @@
  #endif
  
  #endif /* IEEE80211S_H */
+diff --git a/net/mac80211/mesh_hwmp.c b/net/mac80211/mesh_hwmp.c
+index da9e152..dd82cc4 100644
 --- a/net/mac80211/mesh_hwmp.c
 +++ b/net/mac80211/mesh_hwmp.c
-@@ -190,6 +190,8 @@ static int mesh_path_sel_frame_tx(enum m
+@@ -190,6 +190,8 @@ static int mesh_path_sel_frame_tx(enum mpath_frame_type action, u8 flags,
  		pos += 4;
  	}
  
@@ -62,9 +85,27 @@
  	ieee80211_tx_skb(sdata, skb);
  	return 0;
  }
+@@ -301,6 +303,15 @@ void ieee80211s_update_metric(struct ieee80211_local *local,
+ 	struct rate_info rinfo;
+ 
+ 	failed = !(txinfo->flags & IEEE80211_TX_STAT_ACK);
++	if (!ewma_mesh_fail_avg_read(&sta->mesh->fail_avg)) {
++		/* If the average value in mesh metrics calculation
++		 * has been rounded to 0 (success), this resets it to
++		 * the smallest nonzero value to avoid a case where a
++		 * single failure would result in an avg value that goes
++		 * beyond the value of 95 (Link Failure Threshold)
++		 */
++		ewma_mesh_fail_avg_add(&sta->mesh->fail_avg, 1);
++	}
+ 
+ 	/* moving average, scaled to 100.
+ 	 * feed failure as 100 and success as 0
+diff --git a/net/mac80211/tx.c b/net/mac80211/tx.c
+index 7898a9e..cc3ad0d 100644
 --- a/net/mac80211/tx.c
 +++ b/net/mac80211/tx.c
-@@ -4285,6 +4285,12 @@ void __ieee80211_subif_start_xmit(struct
+@@ -4293,6 +4293,12 @@ void __ieee80211_subif_start_xmit(struct sk_buff *skb,
  		if (fast_tx &&
  		    ieee80211_xmit_fast(sdata, sta, fast_tx, skb))
  			goto out;
@@ -77,16 +118,3 @@
  	}
  
  	/* the frame could be fragmented, software-encrypted, and other
---- a/net/mac80211/ieee80211_i.h
-+++ b/net/mac80211/ieee80211_i.h
-@@ -734,6 +734,10 @@ struct ieee80211_if_mesh {
- 	struct mesh_table mpp_paths; /* Store paths for MPP&MAP */
- 	int mesh_paths_generation;
- 	int mpp_paths_generation;
-+	enum {
-+		IEEE80211_MESH_MFP_DISABLED,
-+		IEEE80211_MESH_MFP_ENABLED,
-+	} mfp; /* management frame protection */
- };
- 
- #ifdef CPTCFG_MAC80211_MESH

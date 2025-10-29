@@ -1,0 +1,19 @@
+# If you want 'all the debug', then enable this (i.e. -x debug).
+# Some hints
+#  (a) do not use the precompiled toolchain
+#  (b) you will use a _lot_ more space, so may need to increase rootfs size
+#  (c) if you want less space used, do a complete build without these
+#      then only clean/compile the bits that are needed (don't forget
+#      dependent libraries if necessary...)
+#  (d) on some platforms, ignore SIGILLs in gdb feature probes
+#
+# Once you have the binaries on the system, do something like:
+#
+# gdbserver :9000 /bin/ping example.com
+# ./scripts/remote-gdb 10.42.0.1:9000 ./build_dir/target-*/busybox-*/busybox
+#
+# (taking care to specify the right target if you have lots of things lying around
+# in your build_dir)
+
+CONFIG_NO_STRIP=y
+CONFIG_DEBUG=y

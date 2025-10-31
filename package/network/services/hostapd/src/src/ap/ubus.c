@@ -1890,15 +1890,26 @@ void hostapd_ubus_notify_type(struct hostapd_data *hapd, const char *type)
 	ubus_notify(ctx, &hapd->ubus.obj, type, NULL, -1);
 }
 
+#ifdef CONFIG_DPP
+void hostapd_ubus_notify_dpp_conf_failed(struct hostapd_data *hapd)
+{
+	blob_buf_init(&b, 0);
+
+	blobmsg_add_string(&b, "ifname", hapd->conf->iface);
+
+	ubus_send_event(ctx, "dpp.conf_failed", b.head);
+}
+#endif
+
 #ifdef CONFIG_DPP3
 void hostapd_ubus_notify_dpp_pb_result(struct hostapd_data *hapd, const char *status)
 {
-	if (!hapd->ubus.obj.has_subscribers)
-		return;
-
 	blob_buf_init(&b, 0);
+
+	blobmsg_add_string(&b, "ifname", hapd->conf->iface);
 	blobmsg_add_string(&b, "status", status);
-	ubus_notify(ctx, &hapd->ubus.obj, "dpp_pb_result", b.head, -1);
+
+	ubus_send_event(ctx, "dpp.result", b.head);
 }
 #endif
 

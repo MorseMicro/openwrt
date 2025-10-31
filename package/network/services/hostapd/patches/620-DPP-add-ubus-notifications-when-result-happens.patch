@@ -1,4 +1,4 @@
-From e2047c74b287887e50fe4e24180a950637069bce Mon Sep 17 00:00:00 2001
+From 58011c33c34275a82485d3d4707fd494254b3e32 Mon Sep 17 00:00:00 2001
 From: James Haggerty <james.haggerty@morsemicro.com>
 Date: Tue, 12 Aug 2025 15:41:59 +1000
 Subject: [PATCH] DPP: add ubus notifications when result happens
@@ -12,7 +12,7 @@ This lets userspace react when DPP PB has finished.
  4 files changed, 64 insertions(+), 17 deletions(-)
 
 diff --git a/src/ap/dpp_hostapd.c b/src/ap/dpp_hostapd.c
-index 70dd18e25..f86950789 100644
+index 70dd18e25..5d9cfa6c3 100644
 --- a/src/ap/dpp_hostapd.c
 +++ b/src/ap/dpp_hostapd.c
 @@ -23,6 +23,7 @@
@@ -30,7 +30,7 @@ index 70dd18e25..f86950789 100644
 -	if (status != DPP_STATUS_OK)
 +	if (status != DPP_STATUS_OK) {
  		wpa_msg(hapd->msg_ctx, MSG_INFO, DPP_EVENT_CONF_FAILED);
-+		hostapd_ubus_notify_type(hapd, "dpp_conf_failed");
++		hostapd_ubus_notify_dpp_conf_failed(hapd);
 +	}
  #ifdef CONFIG_DPP2
  	if (auth->peer_version >= 2 &&
@@ -39,7 +39,7 @@ index 70dd18e25..f86950789 100644
  	wpa_printf(MSG_DEBUG,
  		   "DPP: Timeout while waiting for Configuration Result");
  	wpa_msg(hapd->msg_ctx, MSG_INFO, DPP_EVENT_CONF_FAILED);
-+	hostapd_ubus_notify_type(hapd, "dpp_conf_failed");
++	hostapd_ubus_notify_dpp_conf_failed(hapd);
  	dpp_auth_deinit(auth);
  	hapd->dpp_auth = NULL;
  }
@@ -50,7 +50,7 @@ index 70dd18e25..f86950789 100644
 -	else
 +	else {
  		wpa_msg(hapd->msg_ctx, MSG_INFO, DPP_EVENT_CONF_FAILED);
-+		hostapd_ubus_notify_type(hapd, "dpp_conf_failed");
++		hostapd_ubus_notify_dpp_conf_failed(hapd);
 +	}
  	dpp_auth_deinit(auth);
  	hapd->dpp_auth = NULL;
@@ -87,7 +87,7 @@ index 70dd18e25..f86950789 100644
 -	if (!resp)
 +	if (!resp) {
  		wpa_msg(hapd->msg_ctx, MSG_INFO, DPP_EVENT_CONF_FAILED);
-+		hostapd_ubus_notify_type(hapd, "dpp_conf_failed");
++		hostapd_ubus_notify_dpp_conf_failed(hapd);
 +	}
  	return resp;
  }
@@ -99,7 +99,7 @@ index 70dd18e25..f86950789 100644
 -	else
 +	else {
  		wpa_msg(hapd->msg_ctx, MSG_INFO, DPP_EVENT_CONF_FAILED);
-+		hostapd_ubus_notify_type(hapd, "dpp_conf_failed");
++		hostapd_ubus_notify_dpp_conf_failed(hapd);
 +	}
  	dpp_auth_deinit(hapd->dpp_auth);
  	hapd->dpp_auth = NULL;
@@ -166,7 +166,7 @@ index 0f843da6a..4635bdae0 100644
  		u8 ssid[SSID_MAX_LEN];
  		u8 ssid_len;
 diff --git a/wpa_supplicant/dpp_supplicant.c b/wpa_supplicant/dpp_supplicant.c
-index afadd789f..d22f62948 100644
+index afadd789f..e9dcab25b 100644
 --- a/wpa_supplicant/dpp_supplicant.c
 +++ b/wpa_supplicant/dpp_supplicant.c
 @@ -29,6 +29,7 @@
@@ -201,7 +201,7 @@ index afadd789f..d22f62948 100644
 -	if (status != DPP_STATUS_OK)
 +	if (status != DPP_STATUS_OK) {
  		wpa_msg(wpa_s, MSG_INFO, DPP_EVENT_CONF_FAILED);
-+		wpas_ubus_notify_type(wpa_s, "dpp_conf_failed");
++		wpas_ubus_notify_dpp_conf_failed(wpa_s);
 +	}
  #ifdef CONFIG_DPP2
  	if (auth->peer_version >= 2 &&
@@ -210,7 +210,7 @@ index afadd789f..d22f62948 100644
  
  	wpa_printf(MSG_DEBUG, "DPP: Timeout while waiting for Config Response");
  	wpa_msg(wpa_s, MSG_INFO, DPP_EVENT_CONF_FAILED);
-+	wpas_ubus_notify_type(wpa_s, "dpp_conf_failed");
++	wpas_ubus_notify_dpp_conf_failed(wpa_s);
  	dpp_auth_deinit(wpa_s->dpp_auth);
  	wpa_s->dpp_auth = NULL;
  }
@@ -218,7 +218,7 @@ index afadd789f..d22f62948 100644
  	wpa_printf(MSG_DEBUG,
  		   "DPP: Timeout while waiting for Configuration Result");
  	wpa_msg(wpa_s, MSG_INFO, DPP_EVENT_CONF_FAILED);
-+	wpas_ubus_notify_type(wpa_s, "dpp_conf_failed");
++	wpas_ubus_notify_dpp_conf_failed(wpa_s);
  	dpp_auth_deinit(auth);
  	wpa_s->dpp_auth = NULL;
  }
@@ -229,7 +229,7 @@ index afadd789f..d22f62948 100644
 -	else
 +	else {
  		wpa_msg(wpa_s, MSG_INFO, DPP_EVENT_CONF_FAILED);
-+		wpas_ubus_notify_type(wpa_s, "dpp_conf_failed");
++		wpas_ubus_notify_dpp_conf_failed(wpa_s);
 +	}
  	dpp_auth_deinit(auth);
  	wpa_s->dpp_auth = NULL;
@@ -270,7 +270,7 @@ index afadd789f..d22f62948 100644
  	auth->conf_resp = resp;
  	if (!resp) {
  		wpa_msg(wpa_s, MSG_INFO, DPP_EVENT_CONF_FAILED);
-+		wpas_ubus_notify_type(wpa_s, "dpp_conf_failed");
++		wpas_ubus_notify_dpp_conf_failed(wpa_s);
  		dpp_auth_deinit(wpa_s->dpp_auth);
  		wpa_s->dpp_auth = NULL;
  	}
@@ -281,7 +281,7 @@ index afadd789f..d22f62948 100644
 -	else
 +	else {
  		wpa_msg(wpa_s, MSG_INFO, DPP_EVENT_CONF_FAILED);
-+		wpas_ubus_notify_type(wpa_s, "dpp_conf_failed");
++		wpas_ubus_notify_dpp_conf_failed(wpa_s);
 +	}
  	dpp_auth_deinit(wpa_s->dpp_auth);
  	wpa_s->dpp_auth = NULL;

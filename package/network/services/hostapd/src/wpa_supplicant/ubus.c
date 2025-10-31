@@ -253,25 +253,38 @@ void wpas_ubus_notify_type(struct wpa_supplicant *wpa_s, const char *type)
 #ifdef CONFIG_DPP3
 void wpas_ubus_notify_dpp_pb_result(struct wpa_supplicant *wpa_s, const char *status)
 {
-	if (!wpa_s->ubus.obj.has_subscribers)
-		return;
-
 	blob_buf_init(&b, 0);
+
+	blobmsg_add_string(&b, "ifname", wpa_s->ifname);
 	blobmsg_add_string(&b, "status", status);
-	ubus_notify(ctx, &wpa_s->ubus.obj, "dpp_pb_result", b.head, -1);
+
+	ubus_send_event(ctx, "dpp.result", b.head);
 }
 #endif
 
 #ifdef CONFIG_DPP
+void wpas_ubus_notify_dpp_conf_failed(struct wpa_supplicant *wpa_s)
+{
+	blob_buf_init(&b, 0);
+
+	blobmsg_add_string(&b, "ifname", wpa_s->ifname);
+
+	ubus_send_event(ctx, "dpp.conf_failed", b.head);
+}
+
 void wpas_ubus_notify_dpp_conf_received(struct wpa_supplicant *wpa_s,
                                         const struct dpp_config_obj *conf)
 {
-	char *encryption, *ssid, *key;
+	void *tbl;
 
 	blob_buf_init(&b, 0);
 
+	blobmsg_add_string(&b, "ifname", wpa_s->ifname);
+	tbl = blobmsg_open_table(&b, "conf");
 	blobmsg_add_json_from_string(&b, conf->conf_obj);
-	ubus_notify(ctx, &wpa_s->ubus.obj, "dpp_conf_received", b.head, -1);
+	blobmsg_close_table(&b, tbl);
+
+	ubus_send_event(ctx, "dpp.conf_received", b.head);
 }
 #endif
 

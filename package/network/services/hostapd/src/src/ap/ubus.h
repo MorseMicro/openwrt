@@ -51,6 +51,9 @@ int hostapd_ubus_handle_event(struct hostapd_data *hapd, struct hostapd_ubus_req
 void hostapd_ubus_handle_link_measurement(struct hostapd_data *hapd, const u8 *data, size_t len);
 void hostapd_ubus_notify_type(struct hostapd_data *hapd, const char *type);
 void hostapd_ubus_notify(struct hostapd_data *hapd, const char *type, const u8 *mac);
+#ifdef CONFIG_DPP
+void hostapd_ubus_notify_dpp_conf_failed(struct hostapd_data *hapd);
+#endif
 #ifdef CONFIG_DPP3
 void hostapd_ubus_notify_dpp_pb_result(struct hostapd_data *hapd, const char *status);
 #endif

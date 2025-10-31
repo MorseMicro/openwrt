@@ -3,3 +3,4 @@ CONFIG_PACKAGE_morse-modeswitch-button=y
 CONFIG_PACKAGE_morse-mgmt-iface=y
 CONFIG_PACKAGE_luci-app-morseapwizard=y
 CONFIG_PACKAGE_morse-client-config=y
+CONFIG_PACKAGE_luci-app-halowlinkguide=y

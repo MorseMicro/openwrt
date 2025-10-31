@@ -85,7 +85,7 @@
  	RCU_INIT_POINTER(sta->ampdu_mlme.tid_rx[tid], NULL);
  	__clear_bit(tid, sta->ampdu_mlme.agg_session_valid);
  
-+	if (tid_rx) params.ndp = tid_rx->ndp;
++	params.ndp = tid_rx ? tid_rx->ndp : false;
 +
  	ht_dbg(sta->sdata,
  	       "Rx BA session stop requested for %pM tid %u %s reason: %d\n",

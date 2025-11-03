@@ -391,7 +391,7 @@ Index: backports-6.1.145-1/net/mac80211/rx.c
 -		kfree_skb(fwd_skb);
 -		goto rx_accept;
 +		/* skb queued: don't free */
-+		return RX_DROP_MONITOR;
++		return RX_QUEUED;
  	}
  
  	IEEE80211_IFSTA_MESH_CTR_INC(ifmsh, fwded_frames);

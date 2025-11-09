@@ -29,6 +29,10 @@ Usage:
 
             -b <board>              assembles config based on diffconfigs in target board folder.
 
+            -a                      compile all kmods (i.e. even those not in the image). This is useful
+                                    if you plan to publish the kmods on a publicly accessible server,
+                                    usually specified via CONFIG_VERSION_REPO_CUSTOM
+
             -m                      minimal diffconfig. Includes only target_diffconfig when selecting
                                     files from the board config. Often combined with '-x'
                                     for custom configurations.
@@ -169,14 +173,18 @@ if [[ "$(pwd)" != "$(git rev-parse --show-toplevel)" ]]; then
     usage 1
 fi
 
+ALL_KMODS=
 MINIMAL=
 INITIALIZE=
 EXTRAS=
 EXT_TOOLCHAIN=
 GIT_SRC_OVERRIDES=( )
 MODE=""
-while getopts ":l:s:b:x:g:ie:Emh" OPT; do
+while getopts ":l:s:b:x:g:ie:Emha" OPT; do
     case "${OPT}" in
+        a)
+            ALL_KMODS=1
+            ;;
         b)
             MODE=${OPT}
             BOARD="${OPTARG}"
@@ -288,6 +296,9 @@ case "${MODE}" in
                         cat "$f"; echo
                     fi
                 done
+            fi
+
+            if [ "${ALL_KMODS}" = 1 ]; then
                 echo "$CONFIG_ALL_KMODS"
             fi
 

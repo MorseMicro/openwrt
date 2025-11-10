@@ -169,8 +169,9 @@ patch_feeds_packages(){
 
 
 # script has to run from openwrt top
-if [[ "$(pwd)" != "$(git rev-parse --show-toplevel)" ]]; then
-    usage 1
+if [ "$(realpath "$0")" != "$(realpath -q ./scripts/morse_setup.sh)" ]; then
+    echo 'Error: must run morse_setup.sh from main OpenWrt dir (i.e. ./scripts/morse_setup.sh).'
+    exit 1
 fi
 
 ALL_KMODS=

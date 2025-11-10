@@ -284,6 +284,7 @@ case "${MODE}" in
         (
             if [ -w /opt/openwrt ]; then
                 echo 'CONFIG_DOWNLOAD_FOLDER="/opt/openwrt/dl"'
+                echo 'CONFIG_CCACHE_DIR="/opt/openwrt/ccache"'
             fi
 
             for f in ./boards/common/*_diffconfig; do

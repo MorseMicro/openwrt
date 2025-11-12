@@ -12,3 +12,10 @@ CONFIG_TARGET_PREINIT_BROADCAST="192.168.12.255"
 CONFIG_PACKAGE_mt7603e-txpat-halowlink2=y
 # EU includes European countries that have EU-style HaLow regulations, not just EU member states.
 CONFIG_WIRELESS_REGDB_FILTERED="AU:AU US:US JP:JP EU:AL,AT,BA,BE,BG,CH,CY,CZ,DE,DK,EE,ES,FI,FL,FR,GB,GR,HR,HU,IE,IS,IT,LT,LU,LV,MD,MK,MT,NL,NO,PL,PT,RO,SE,SI,SK,TR"
+
+CONFIG_PACKAGE_persistent-vars-storage-ubootenv=y
+CONFIG_PACKAGE_morse-modeswitch-button=y
+CONFIG_PACKAGE_morse-mgmt-iface=y
+CONFIG_PACKAGE_luci-app-morseapwizard=y
+CONFIG_PACKAGE_morse-client-config=y
+CONFIG_PACKAGE_luci-app-halowlinkguide=y

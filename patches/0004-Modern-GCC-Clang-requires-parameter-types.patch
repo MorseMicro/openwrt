@@ -1,0 +1,49 @@
+From 054542869affd1d98a9f2b2befb85097891b374b Mon Sep 17 00:00:00 2001
+From: James Haggerty <james.haggerty@morsemicro.com>
+Date: Mon, 17 Nov 2025 09:56:00 +1100
+Subject: [PATCH] Modern GCC/Clang requires parameter types.
+
+---
+ ...r-types-to-declarations-for-clang-16.patch | 30 +++++++++++++++++++
+ 1 file changed, 30 insertions(+)
+ create mode 100644 feeds/packages/lang/perl/patches/997-Add-parameter-types-to-declarations-for-clang-16.patch
+
+diff --git a/feeds/packages/lang/perl/patches/997-Add-parameter-types-to-declarations-for-clang-16.patch b/feeds/packages/lang/perl/patches/997-Add-parameter-types-to-declarations-for-clang-16.patch
+new file mode 100644
+index 000000000..4687dba44
+--- /dev/null
++++ b/lang/perl/patches/997-Add-parameter-types-to-declarations-for-clang-16.patch
+@@ -0,0 +1,30 @@
++From e1ca9a418fa6b7d26fbb1931c9164141035262c3 Mon Sep 17 00:00:00 2001
++From: Peter Levine <plevine457@gmail.com>
++Date: Tue, 17 Jan 2023 02:47:12 -0500
++Subject: [PATCH] Add parameter types to declarations for clang-16
++
++ANSI C style function declarations without parameter types are errors with clang-16.
++---
++ Configure | 4 ++--
++ 1 file changed, 2 insertions(+), 2 deletions(-)
++
++diff --git a/Configure b/Configure
++index 67273792d6..e2b87d6245 100755
++--- a/Configure
+++++ b/Configure
++@@ -7927,10 +7927,10 @@ $cat >malloc.c <<END
++ #include <stdlib.h>
++ #endif
++ #ifdef TRY_MALLOC
++-void *malloc();
+++void *malloc(size_t);
++ #endif
++ #ifdef TRY_FREE
++-void free();
+++void free(void *);
++ #endif
++ END
++ case "$malloctype" in
++-- 
++2.51.0
++
+-- 
+2.51.0
+

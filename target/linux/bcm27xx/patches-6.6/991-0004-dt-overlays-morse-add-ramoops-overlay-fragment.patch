@@ -8,35 +8,44 @@ Subject: [PATCH 4/4] dt-overlays: morse: add ramoops overlay fragment
  1 file changed, 23 insertions(+)
  create mode 100644 arch/arm/boot/dts/overlays/ramoops-overlay.dts
 
-diff --git a/arch/arm/boot/dts/overlays/ramoops-overlay.dts b/arch/arm/boot/dts/overlays/ramoops-overlay.dts
-new file mode 100644
-index 000000000..ffe10ba25
---- /dev/null
-+++ b/arch/arm/boot/dts/overlays/ramoops-overlay.dts
-@@ -0,0 +1,23 @@
-+/dts-v1/;
-+/plugin/;
-+
+Index: linux-6.6.110/arch/arm/boot/dts/overlays/ramoops-overlay.dts
+===================================================================
+--- linux-6.6.110.orig/arch/arm/boot/dts/overlays/ramoops-overlay.dts
++++ linux-6.6.110/arch/arm/boot/dts/overlays/ramoops-overlay.dts
+@@ -1,25 +1,23 @@
+ /dts-v1/;
+ /plugin/;
+ 
+-/ {
+-	compatible = "brcm,bcm2835";
 +/{
 +	compatible = "brcm,bcm2835", "brcm,bcm2836", "brcm,bcm2708", "brcm,bcm2709", "brcm,bcm2711";
-+
-+	fragment@0 {
-+		target = <&rmem>;
-+		__overlay__ {
+ 
+ 	fragment@0 {
+ 		target = <&rmem>;
+ 		__overlay__ {
+-			ramoops: ramoops@b000000 {
 +			#address-cells = <2>;
 +			#size-cells = <1>;
 +			ranges;
 +
 +			/* 1 MB reserved for ramoops/pstore */
 +			ramoops@34000000 {
-+				compatible = "ramoops";
+ 				compatible = "ramoops";
+-				reg = <0x0b000000 0x10000>; /* 64kB */
+-				record-size = <0x4000>; /* 16kB */
+-				console-size = <0>; /* disabled by default */
 +				reg = <0x0 0x34000000 0x100000>;
 +				record-size = <0x4000>;
 +				console-size = <0x4000>;
-+			};
-+		};
-+	};
-+};
-\ No newline at end of file
---
-2.25.1
+ 			};
+ 		};
+ 	};
+-
+-	__overrides__ {
+-		base-addr = <&ramoops>,"reg:0";
+-		total-size = <&ramoops>,"reg:4";
+-		record-size = <&ramoops>,"record-size:0";
+-		console-size = <&ramoops>,"console-size:0";
+-	};
+ };

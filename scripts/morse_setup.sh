@@ -158,7 +158,7 @@ patch_feeds_packages(){
 
 
 # script has to run from openwrt top
-if [[ "$(pwd)" != "$(git rev-parse --show-toplevel)" ]]; then
+if [[ "$(readlink -f $(pwd))" != "$(git rev-parse --show-toplevel)" ]]; then
     usage 1
 fi
 

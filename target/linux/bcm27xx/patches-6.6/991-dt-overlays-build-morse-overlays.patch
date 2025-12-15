@@ -1,6 +1,8 @@
---- a/arch/arm/boot/dts/overlays/Makefile
-+++ b/arch/arm/boot/dts/overlays/Makefile
-@@ -143,7 +143,11 @@ dtbo-$(CONFIG_ARCH_BCM2835) += \
+Index: linux-6.6.110/arch/arm/boot/dts/overlays/Makefile
+===================================================================
+--- linux-6.6.110.orig/arch/arm/boot/dts/overlays/Makefile
++++ linux-6.6.110/arch/arm/boot/dts/overlays/Makefile
+@@ -184,7 +184,11 @@ dtbo-$(CONFIG_ARCH_BCM2835) += \
  	miniuart-bt.dtbo \
  	mipi-dbi-spi.dtbo \
  	mlx90640.dtbo \
@@ -9,14 +11,6 @@
 +	morse-ps.dtbo \
 +	mm610x-spi.dtbo \
 +	mm810x-spi.dtbo \
- 	mpu6050.dtbo \
  	mz61581.dtbo \
  	ov2311.dtbo \
-@@ -173,6 +177,7 @@ dtbo-$(CONFIG_ARCH_BCM2835) += \
- 	pwm-ir-tx.dtbo \
- 	qca7000.dtbo \
- 	qca7000-uart0.dtbo \
-+	ramoops.dtbo \
- 	rotary-encoder.dtbo \
- 	rpi-backlight.dtbo \
- 	rpi-cirrus-wm5102.dtbo \
+ 	ov5647.dtbo \

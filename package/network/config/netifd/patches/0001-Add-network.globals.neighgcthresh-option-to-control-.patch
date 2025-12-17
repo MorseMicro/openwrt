@@ -15,19 +15,11 @@ gc_thresh3.
  system.h       |  2 ++
  4 files changed, 61 insertions(+), 1 deletion(-)
 
-diff --git a/config.c b/config.c
-index d4a65169dd98..d4584f69f1d3 100644
---- a/config.c
-+++ b/config.c
-@@ -27,6 +27,7 @@
- #include "proto.h"
- #include "wireless.h"
- #include "config.h"
-+#include "system.h"
- 
- bool config_init = false;
- 
-@@ -531,11 +532,29 @@ config_init_globals(void)
+Index: netifd-2025.05.23~7901e66c/config.c
+===================================================================
+--- netifd-2025.05.23~7901e66c.orig/config.c
++++ netifd-2025.05.23~7901e66c/config.c
+@@ -533,7 +533,7 @@ config_init_globals(void)
  	struct uci_section *globals = uci_lookup_section(
  			uci_ctx, uci_network, "globals");
  	if (!globals)
@@ -36,7 +28,10 @@ index d4a65169dd98..d4584f69f1d3 100644
  
  	const char *ula_prefix = uci_lookup_option_string(
  			uci_ctx, globals, "ula_prefix");
- 	interface_ip_set_ula_prefix(ula_prefix);
+@@ -548,6 +548,25 @@ config_init_globals(void)
+ 			uci_ctx, globals, "udp_l3mdev");
+ 	if (udp_l3mdev)
+ 		system_udp_l3mdev(!strcmp(udp_l3mdev, "1"));
 +
 +	const char *neighgcthresh = uci_lookup_option_string(
 +			uci_ctx, globals, "neighgcthresh");
@@ -48,20 +43,21 @@ index d4a65169dd98..d4584f69f1d3 100644
 +			system_set_neigh_gc_thresh((unsigned int)val, (unsigned int)val + 384, (unsigned int)val + 896);
 +		else
 +			goto defaults;
-+	} else {
-+		goto defaults;
-+	}
++		} else {
++			goto defaults;
++		}
 +	return;
 +
 +defaults:
 +	system_set_neigh_gc_thresh(128, 512, 1024);
++
  }
  
  static void
-diff --git a/system-dummy.c b/system-dummy.c
-index 84382b3a9ad9..33b4b7c5cd6c 100644
---- a/system-dummy.c
-+++ b/system-dummy.c
+Index: netifd-2025.05.23~7901e66c/system-dummy.c
+===================================================================
+--- netifd-2025.05.23~7901e66c.orig/system-dummy.c
++++ netifd-2025.05.23~7901e66c/system-dummy.c
 @@ -30,6 +30,12 @@ int system_init(void)
  	return 0;
  }
@@ -74,12 +70,12 @@ index 84382b3a9ad9..33b4b7c5cd6c 100644
 +
  int system_bridge_addbr(struct device *bridge, struct bridge_config *cfg)
  {
- 	D(SYSTEM, "brctl addbr %s vlan_filtering=%d\n",
-diff --git a/system-linux.c b/system-linux.c
-index 5eec1eeb5c14..7bcc5d0d75da 100644
---- a/system-linux.c
-+++ b/system-linux.c
-@@ -397,6 +397,13 @@ dev_sysfs_path(const char *ifname, const char *file)
+ 	D(SYSTEM, "brctl addbr %s vlan_filtering=%d",
+Index: netifd-2025.05.23~7901e66c/system-linux.c
+===================================================================
+--- netifd-2025.05.23~7901e66c.orig/system-linux.c
++++ netifd-2025.05.23~7901e66c/system-linux.c
+@@ -409,6 +409,13 @@ dev_sysfs_path(const char *ifname, const
  	return dev_buf;
  }
  
@@ -93,7 +89,7 @@ index 5eec1eeb5c14..7bcc5d0d75da 100644
  static void
  system_set_dev_sysctl(const char *prefix, const char *file, const char *ifname,
  		      const char *val)
-@@ -420,6 +427,32 @@ system_set_dev_sysfs(const char *file, const char *ifname, const char *val)
+@@ -432,6 +439,32 @@ system_set_dev_sysfs(const char *file, c
  	write_file(dev_sysfs_path(ifname, file), val);
  }
  
@@ -126,11 +122,11 @@ index 5eec1eeb5c14..7bcc5d0d75da 100644
  static void
  system_set_dev_sysfs_int(const char *file, const char *ifname, int val)
  {
-diff --git a/system.h b/system.h
-index 890966b26e3b..794ccc62e2b3 100644
---- a/system.h
-+++ b/system.h
-@@ -241,6 +241,8 @@ static inline int system_get_addr_len(unsigned int flags)
+Index: netifd-2025.05.23~7901e66c/system.h
+===================================================================
+--- netifd-2025.05.23~7901e66c.orig/system.h
++++ netifd-2025.05.23~7901e66c/system.h
+@@ -241,6 +241,8 @@ static inline int system_get_addr_len(un
  extern const char * const bonding_policy_str[__BONDING_MODE_MAX];
  
  int system_init(void);
@@ -139,6 +135,3 @@ index 890966b26e3b..794ccc62e2b3 100644
  
  int system_bridge_addbr(struct device *bridge, struct bridge_config *cfg);
  int system_bridge_delbr(struct device *bridge);
--- 
-2.51.1
-

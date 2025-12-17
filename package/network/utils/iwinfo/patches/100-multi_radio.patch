@@ -1,5 +1,7 @@
---- a/api/nl80211.h
-+++ b/api/nl80211.h
+Index: libiwinfo-2025.11.25~d625cc77/api/nl80211.h
+===================================================================
+--- libiwinfo-2025.11.25~d625cc77.orig/api/nl80211.h
++++ libiwinfo-2025.11.25~d625cc77/api/nl80211.h
 @@ -11,7 +11,7 @@
   * Copyright 2008 Jouni Malinen <jouni.malinen@atheros.com>
   * Copyright 2008 Colin McCabe <colin@cozybit.com>
@@ -1394,11 +1396,13 @@
 +};
 +
  #endif /* __LINUX_NL80211_H */
---- a/iwinfo_nl80211.c
-+++ b/iwinfo_nl80211.c
-@@ -37,6 +37,11 @@
- 
- static struct nl80211_state *nls = NULL;
+Index: libiwinfo-2025.11.25~d625cc77/iwinfo_nl80211.c
+===================================================================
+--- libiwinfo-2025.11.25~d625cc77.orig/iwinfo_nl80211.c
++++ libiwinfo-2025.11.25~d625cc77/iwinfo_nl80211.c
+@@ -48,6 +48,11 @@ static enum scanmode {
+ 	SCANMODE_ACTIVE,   /* nl80211 active */
+ };
  
 +struct nl80211_if_data {
 +	int mode;
@@ -1408,7 +1412,7 @@
  static void nl80211_close(void)
  {
  	if (nls)
-@@ -862,7 +867,7 @@ static char * nl80211_phy2ifname(const c
+@@ -876,7 +881,7 @@ static char * nl80211_phy2ifname(const c
  
  static int nl80211_get_mode_cb(struct nl_msg *msg, void *arg)
  {
@@ -1417,7 +1421,7 @@
  	struct nlattr **tb = nl80211_parse(msg);
  	const int ifmodes[NL80211_IFTYPE_MAX + 1] = {
  		IWINFO_OPMODE_UNKNOWN,		/* unspecified */
-@@ -878,37 +883,57 @@ static int nl80211_get_mode_cb(struct nl
+@@ -892,37 +897,57 @@ static int nl80211_get_mode_cb(struct nl
  	};
  
  	if (tb[NL80211_ATTR_IFTYPE])
@@ -1484,15 +1488,16 @@
  		return 0;
  
  	phy = nl80211_ifname2phy(ifname);
-@@ -916,7 +941,10 @@ static int __nl80211_hostapd_query(const
+@@ -930,7 +955,11 @@ static int __nl80211_hostapd_query(const
  	if (!phy)
  		return 0;
  
--	snprintf(buf, sizeof(buf), "/var/run/hostapd-%s.conf", phy);
+-	snprintf(buf, sizeof(buf), "/var/run/hostapd-%s-%s.conf", phy, ifname);
 +	if (data.radio_idx >= 0)
 +		snprintf(buf, sizeof(buf), "/var/run/hostapd-%s.%d.conf", phy, data.radio_idx);
 +	else
 +		snprintf(buf, sizeof(buf), "/var/run/hostapd-%s.conf", phy);
++
  	fp = fopen(buf, "r");
  
- 	if (!fp)
+ 	if (!fp) {

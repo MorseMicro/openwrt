@@ -1,8 +1,8 @@
-diff --git a/net/mac80211/cfg.c b/net/mac80211/cfg.c
-index f1c08b4..9986730 100644
---- a/net/mac80211/cfg.c
-+++ b/net/mac80211/cfg.c
-@@ -2041,6 +2041,10 @@ static int ieee80211_add_station(struct wiphy *wiphy, struct net_device *dev,
+Index: backports-6.12.52/net/mac80211/cfg.c
+===================================================================
+--- backports-6.12.52.orig/net/mac80211/cfg.c
++++ backports-6.12.52/net/mac80211/cfg.c
+@@ -2130,6 +2130,10 @@ static int ieee80211_add_station(struct
  		return err;
  	}
  
@@ -13,14 +13,14 @@ index f1c08b4..9986730 100644
  	/*
  	 * for TDLS and for unassociated station, rate control should be
  	 * initialized only when rates are known and station is marked
-diff --git a/net/mac80211/ieee80211_i.h b/net/mac80211/ieee80211_i.h
-index 8f56741..74fc4cb 100644
---- a/net/mac80211/ieee80211_i.h
-+++ b/net/mac80211/ieee80211_i.h
-@@ -738,6 +738,10 @@ struct ieee80211_if_mesh {
- 	struct mesh_table mpp_paths; /* Store paths for MPP&MAP */
+Index: backports-6.12.52/net/mac80211/ieee80211_i.h
+===================================================================
+--- backports-6.12.52.orig/net/mac80211/ieee80211_i.h
++++ backports-6.12.52/net/mac80211/ieee80211_i.h
+@@ -800,6 +800,10 @@ struct ieee80211_if_mesh {
  	int mesh_paths_generation;
  	int mpp_paths_generation;
+ 	struct mesh_tx_cache tx_cache;
 +	enum {
 +		IEEE80211_MESH_MFP_DISABLED,
 +		IEEE80211_MESH_MFP_ENABLED,
@@ -28,12 +28,12 @@ index 8f56741..74fc4cb 100644
  };
  
  #ifdef CPTCFG_MAC80211_MESH
-diff --git a/net/mac80211/mesh.c b/net/mac80211/mesh.c
-index dd75e0a..542e1cd 100644
---- a/net/mac80211/mesh.c
-+++ b/net/mac80211/mesh.c
-@@ -1556,6 +1556,19 @@ out:
- 	sdata_unlock(sdata);
+Index: backports-6.12.52/net/mac80211/mesh.c
+===================================================================
+--- backports-6.12.52.orig/net/mac80211/mesh.c
++++ backports-6.12.52/net/mac80211/mesh.c
+@@ -1710,6 +1710,19 @@ void ieee80211_mesh_rx_queued_mgmt(struc
+ 	}
  }
  
 +void mesh_update_mfp_flag(struct ieee80211_sub_if_data *sdata, struct sta_info *sta)
@@ -52,11 +52,11 @@ index dd75e0a..542e1cd 100644
  static void mesh_bss_info_changed(struct ieee80211_sub_if_data *sdata)
  {
  	struct ieee80211_if_mesh *ifmsh = &sdata->u.mesh;
-diff --git a/net/mac80211/mesh.h b/net/mac80211/mesh.h
-index 6e295f9..99dc3f6 100644
---- a/net/mac80211/mesh.h
-+++ b/net/mac80211/mesh.h
-@@ -339,12 +339,15 @@ static inline bool mesh_path_sel_is_hwmp(struct ieee80211_sub_if_data *sdata)
+Index: backports-6.12.52/net/mac80211/mesh.h
+===================================================================
+--- backports-6.12.52.orig/net/mac80211/mesh.h
++++ backports-6.12.52/net/mac80211/mesh.h
+@@ -418,12 +418,15 @@ static inline bool mesh_path_sel_is_hwmp
  void mesh_path_flush_by_iface(struct ieee80211_sub_if_data *sdata);
  void mesh_sync_adjust_tsf(struct ieee80211_sub_if_data *sdata);
  void ieee80211s_stop(void);
@@ -72,11 +72,11 @@ index 6e295f9..99dc3f6 100644
  #endif
  
  #endif /* IEEE80211S_H */
-diff --git a/net/mac80211/mesh_hwmp.c b/net/mac80211/mesh_hwmp.c
-index da9e152..dd82cc4 100644
---- a/net/mac80211/mesh_hwmp.c
-+++ b/net/mac80211/mesh_hwmp.c
-@@ -190,6 +190,8 @@ static int mesh_path_sel_frame_tx(enum mpath_frame_type action, u8 flags,
+Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
+===================================================================
+--- backports-6.12.52.orig/net/mac80211/mesh_hwmp.c
++++ backports-6.12.52/net/mac80211/mesh_hwmp.c
+@@ -190,6 +190,8 @@ static int mesh_path_sel_frame_tx(enum m
  		pos += 4;
  	}
  
@@ -85,7 +85,7 @@ index da9e152..dd82cc4 100644
  	ieee80211_tx_skb(sdata, skb);
  	return 0;
  }
-@@ -301,6 +303,15 @@ void ieee80211s_update_metric(struct ieee80211_local *local,
+@@ -303,6 +305,15 @@ void ieee80211s_update_metric(struct iee
  	struct rate_info rinfo;
  
  	failed = !(txinfo->flags & IEEE80211_TX_STAT_ACK);
@@ -101,11 +101,11 @@ index da9e152..dd82cc4 100644
  
  	/* moving average, scaled to 100.
  	 * feed failure as 100 and success as 0
-diff --git a/net/mac80211/tx.c b/net/mac80211/tx.c
-index 7898a9e..cc3ad0d 100644
---- a/net/mac80211/tx.c
-+++ b/net/mac80211/tx.c
-@@ -4293,6 +4293,12 @@ void __ieee80211_subif_start_xmit(struct sk_buff *skb,
+Index: backports-6.12.52/net/mac80211/tx.c
+===================================================================
+--- backports-6.12.52.orig/net/mac80211/tx.c
++++ backports-6.12.52/net/mac80211/tx.c
+@@ -4315,6 +4315,12 @@ void __ieee80211_subif_start_xmit(struct
  		if (fast_tx &&
  		    ieee80211_xmit_fast(sdata, sta, fast_tx, skb))
  			goto out;

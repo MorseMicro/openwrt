@@ -1,0 +1,39 @@
+Index: backports-6.12.52/include/net/cfg80211.h
+===================================================================
+--- backports-6.12.52.orig/include/net/cfg80211.h
++++ backports-6.12.52/include/net/cfg80211.h
+@@ -129,6 +129,8 @@ struct wiphy;
+  *	with very low power (VLP), even if otherwise set to NO_IR.
+  * @IEEE80211_CHAN_ALLOW_20MHZ_ACTIVITY: Allow activity on a 20 MHz channel,
+  *	even if otherwise set to NO_IR.
++ *@IEEE80211_CHAN_IGNORE: Mark this channel as disabled when
++ *	communicating channel list via nl80211.
+  */
+ enum ieee80211_channel_flags {
+ 	IEEE80211_CHAN_DISABLED			= BIT(0),
+@@ -158,8 +160,11 @@ enum ieee80211_channel_flags {
+ 	IEEE80211_CHAN_CAN_MONITOR		= BIT(24),
+ 	IEEE80211_CHAN_ALLOW_6GHZ_VLP_AP	= BIT(25),
+ 	IEEE80211_CHAN_ALLOW_20MHZ_ACTIVITY     = BIT(26),
++	IEEE80211_CHAN_IGNORE                   = BIT(27),
+ };
+ 
++#define HAS_IEEE80211_CHAN_IGNORE
++
+ #define IEEE80211_CHAN_NO_HT40 \
+ 	(IEEE80211_CHAN_NO_HT40PLUS | IEEE80211_CHAN_NO_HT40MINUS)
+ 
+Index: backports-6.12.52/net/wireless/nl80211.c
+===================================================================
+--- backports-6.12.52.orig/net/wireless/nl80211.c
++++ backports-6.12.52/net/wireless/nl80211.c
+@@ -1126,6 +1126,9 @@ static int nl80211_msg_put_channel(struc
+ 	if ((chan->flags & IEEE80211_CHAN_DISABLED) &&
+ 	    nla_put_flag(msg, NL80211_FREQUENCY_ATTR_DISABLED))
+ 		goto nla_put_failure;
++	if ((chan->flags & IEEE80211_CHAN_IGNORE) &&
++	    nla_put_flag(msg, NL80211_FREQUENCY_ATTR_DISABLED))
++		goto nla_put_failure;
+ 	if (chan->flags & IEEE80211_CHAN_NO_IR) {
+ 		if (nla_put_flag(msg, NL80211_FREQUENCY_ATTR_NO_IR))
+ 			goto nla_put_failure;

@@ -10,13 +10,13 @@
 #  - **Read**: Returns `1` if aggregation for voice is enabled, `0`  therwise.
 #  - **Write**: Accepts `0` to disable and `1` to enable aggregation of voice traffic.
 
-Index: backports-6.1.110-1/net/mac80211/debugfs_sta.c
+Index: backports-6.12.52/net/mac80211/debugfs_sta.c
 ===================================================================
---- backports-6.1.110-1.orig/net/mac80211/debugfs_sta.c
-+++ backports-6.1.110-1/net/mac80211/debugfs_sta.c
-@@ -1014,6 +1014,43 @@ out:
+--- backports-6.12.52.orig/net/mac80211/debugfs_sta.c
++++ backports-6.12.52/net/mac80211/debugfs_sta.c
+@@ -1225,6 +1225,43 @@ out:
  }
- STA_OPS(he_capa);
+ LINK_STA_OPS(eht_capa);
  
 +static ssize_t sta_enable_aggr_vo_read(struct file *file, char __user *userbuf,
 +				size_t count, loff_t *ppos)
@@ -58,19 +58,19 @@ Index: backports-6.1.110-1/net/mac80211/debugfs_sta.c
  #define DEBUGFS_ADD(name) \
  	debugfs_create_file(#name, 0400, \
  		sta->debugfs_dir, sta, &sta_ ##name## _ops)
-@@ -1052,6 +1089,7 @@ void ieee80211_sta_debugfs_add(struct st
- 	DEBUGFS_ADD(ht_capa);
- 	DEBUGFS_ADD(vht_capa);
- 	DEBUGFS_ADD(he_capa);
+@@ -1260,6 +1297,7 @@ void ieee80211_sta_debugfs_add(struct st
+ 	DEBUGFS_ADD(num_ps_buf_frames);
+ 	DEBUGFS_ADD(last_seq_ctrl);
+ 	DEBUGFS_ADD(agg_status);
 +	DEBUGFS_ADD(enable_aggr_vo);
+ 	/* FIXME: Kept here as the statistics are only done on the deflink */
+ 	DEBUGFS_ADD_COUNTER(tx_filtered, deflink.status_stats.filtered);
  
- 	DEBUGFS_ADD_COUNTER(rx_duplicates, deflink.rx_stats.num_duplicates);
- 	DEBUGFS_ADD_COUNTER(rx_fragments, deflink.rx_stats.fragments);
-Index: backports-6.1.110-1/net/mac80211/sta_info.h
+Index: backports-6.12.52/net/mac80211/sta_info.h
 ===================================================================
---- backports-6.1.110-1.orig/net/mac80211/sta_info.h
-+++ backports-6.1.110-1/net/mac80211/sta_info.h
-@@ -722,6 +722,8 @@ struct sta_info {
+--- backports-6.12.52.orig/net/mac80211/sta_info.h
++++ backports-6.12.52/net/mac80211/sta_info.h
+@@ -717,6 +717,8 @@ struct sta_info {
  	struct link_sta_info deflink;
  	struct link_sta_info __rcu *link[IEEE80211_MLD_MAX_NUM_LINKS];
  
@@ -79,11 +79,11 @@ Index: backports-6.1.110-1/net/mac80211/sta_info.h
  	/* keep last! */
  	struct ieee80211_sta sta;
  };
-Index: backports-6.1.110-1/net/mac80211/tx.c
+Index: backports-6.12.52/net/mac80211/tx.c
 ===================================================================
---- backports-6.1.110-1.orig/net/mac80211/tx.c
-+++ backports-6.1.110-1/net/mac80211/tx.c
-@@ -1209,7 +1209,7 @@ ieee80211_aggr_check(struct ieee80211_su
+--- backports-6.12.52.orig/net/mac80211/tx.c
++++ backports-6.12.52/net/mac80211/tx.c
+@@ -1189,7 +1189,7 @@ void ieee80211_aggr_check(struct ieee802
  		return;
  
  	if (!sta || !sta->sta.deflink.ht_cap.ht_supported ||

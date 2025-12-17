@@ -1,6 +1,8 @@
---- a/include/linux/ieee80211.h
-+++ b/include/linux/ieee80211.h
-@@ -3883,6 +3883,9 @@ enum ieee80211_back_actioncode {
+Index: backports-6.12.52/include/linux/ieee80211.h
+===================================================================
+--- backports-6.12.52.orig/include/linux/ieee80211.h
++++ backports-6.12.52/include/linux/ieee80211.h
+@@ -4279,6 +4279,9 @@ enum ieee80211_back_actioncode {
  	WLAN_ACTION_ADDBA_REQ = 0,
  	WLAN_ACTION_ADDBA_RESP = 1,
  	WLAN_ACTION_DELBA = 2,
@@ -10,13 +12,14 @@
  };
  
  /* BACK (block-ack) parties */
---- a/include/net/mac80211.h
-+++ b/include/net/mac80211.h
-@@ -143,6 +143,14 @@
-  * to the frame TX timestamp and report the ack RX timestamp in the
-  * ieee80211_tx_status struct.
+Index: backports-6.12.52/include/net/mac80211.h
+===================================================================
+--- backports-6.12.52.orig/include/net/mac80211.h
++++ backports-6.12.52/include/net/mac80211.h
+@@ -127,6 +127,14 @@
+  * via the usual ieee80211_tx_dequeue).
   */
-+
+ 
 +/** Morse Micro patches which add functionality that the driver needs to know about, can be
 + * signalled by adding a define here.
 + */
@@ -24,30 +27,13 @@
 +/** mac80211 has the capability to negotiate NDP block acknowledgements */
 +#define MORSE_MAC80211_S1G_FEATURE_NDP_BLOCKACK
 +
- struct device;
- 
++
  /**
-@@ -1385,7 +1393,7 @@ ieee80211_tx_info_clear_status(struct ie
-  * @RX_FLAG_AMPDU_EOF_BIT_KNOWN: The EOF value is known
-  * @RX_FLAG_RADIOTAP_HE: HE radiotap data is present
-  *	(&struct ieee80211_radiotap_he, mac80211 will fill in
-- *	
-+ *
-  *	 - DATA3_DATA_MCS
-  *	 - DATA3_DATA_DCM
-  *	 - DATA3_CODING
-@@ -1393,7 +1401,7 @@ ieee80211_tx_info_clear_status(struct ie
-  *	 - DATA5_DATA_BW_RU_ALLOC
-  *	 - DATA6_NSTS
-  *	 - DATA3_STBC
-- *	
-+ *
-  *	from the RX info data, so leave those zeroed when building this data)
-  * @RX_FLAG_RADIOTAP_HE_MU: HE MU radiotap data is present
-  *	(&struct ieee80211_radiotap_he_mu)
-@@ -2635,6 +2643,9 @@ struct ieee80211_txq {
-  * @IEEE80211_HW_MLO_MCAST_MULTI_LINK_TX: Hardware/driver handles transmitting
-  *	multicast frames on all links, mac80211 should not do that.
+  * DOC: HW timestamping
+  *
+@@ -2835,6 +2843,9 @@ struct ieee80211_txq {
+  *	HW flag so drivers can opt in according to their own control, e.g. in
+  *	testing.
   *
 + * @IEEE80211_HW_SUPPORTS_NDP_BLOCKACK: Hardware supports 11ah A-MPDU aggregation with NDP block
 + *	ACKs
@@ -55,15 +41,15 @@
   * @NUM_IEEE80211_HW_FLAGS: number of hardware flags, used for sizing arrays
   */
  enum ieee80211_hw_flags {
-@@ -2692,6 +2703,7 @@ enum ieee80211_hw_flags {
- 	IEEE80211_HW_SUPPORTS_CONC_MON_RX_DECAP,
- 	IEEE80211_HW_DETECTS_COLOR_COLLISION,
- 	IEEE80211_HW_MLO_MCAST_MULTI_LINK_TX,
+@@ -2896,6 +2907,7 @@ enum ieee80211_hw_flags {
+ 	IEEE80211_HW_DISALLOW_PUNCTURING_5GHZ,
+ 	IEEE80211_HW_HANDLES_QUIET_CSA,
+ 	IEEE80211_HW_STRICT,
 +	IEEE80211_HW_SUPPORTS_NDP_BLOCKACK,
  
  	/* keep last, obviously */
  	NUM_IEEE80211_HW_FLAGS
-@@ -3503,6 +3515,7 @@ enum ieee80211_ampdu_mlme_action {
+@@ -3718,6 +3730,7 @@ enum ieee80211_ampdu_mlme_action {
   *	%IEEE80211_AMPDU_TX_OPERATIONAL
   * @amsdu: indicates the peer's ability to receive A-MSDU within A-MPDU.
   *	valid when the action is set to %IEEE80211_AMPDU_TX_OPERATIONAL
@@ -71,7 +57,7 @@
   * @timeout: BA session timeout. Valid only when the action is set to
   *	%IEEE80211_AMPDU_RX_START
   */
-@@ -3513,6 +3526,7 @@ struct ieee80211_ampdu_params {
+@@ -3728,6 +3741,7 @@ struct ieee80211_ampdu_params {
  	u16 ssn;
  	u16 buf_size;
  	bool amsdu;
@@ -79,9 +65,11 @@
  	u16 timeout;
  };
  
---- a/net/mac80211/agg-rx.c
-+++ b/net/mac80211/agg-rx.c
-@@ -80,6 +80,8 @@ void ___ieee80211_stop_rx_ba_session(str
+Index: backports-6.12.52/net/mac80211/agg-rx.c
+===================================================================
+--- backports-6.12.52.orig/net/mac80211/agg-rx.c
++++ backports-6.12.52/net/mac80211/agg-rx.c
+@@ -80,6 +80,8 @@ void __ieee80211_stop_rx_ba_session(stru
  	RCU_INIT_POINTER(sta->ampdu_mlme.tid_rx[tid], NULL);
  	__clear_bit(tid, sta->ampdu_mlme.agg_session_valid);
  
@@ -90,7 +78,7 @@
  	ht_dbg(sta->sdata,
  	       "Rx BA session stop requested for %pM tid %u %s reason: %d\n",
  	       sta->sta.addr, tid,
-@@ -94,7 +96,7 @@ void ___ieee80211_stop_rx_ba_session(str
+@@ -94,7 +96,7 @@ void __ieee80211_stop_rx_ba_session(stru
  	/* check if this is a self generated aggregation halt */
  	if (initiator == WLAN_BACK_RECIPIENT && tx)
  		ieee80211_send_delba(sta->sdata, sta->sta.addr,
@@ -99,16 +87,16 @@
  
  	/*
  	 * return here in case tid_rx is not assigned - which will happen if
-@@ -217,7 +219,7 @@ static void ieee80211_add_addbaext(struc
+@@ -225,7 +227,7 @@ free:
  
  static void ieee80211_send_addba_resp(struct sta_info *sta, u8 *da, u16 tid,
  				      u8 dialog_token, u16 status, u16 policy,
 -				      u16 buf_size, u16 timeout,
 +				      u16 buf_size, u16 timeout, bool ndp,
- 				      const struct ieee80211_addba_ext_ie *addbaext)
+ 				      const u8 req_addba_ext_data)
  {
  	struct ieee80211_sub_if_data *sdata = sta->sdata;
-@@ -251,7 +253,8 @@ static void ieee80211_send_addba_resp(st
+@@ -246,7 +248,8 @@ static void ieee80211_send_addba_resp(st
  
  	skb_put(skb, 1 + sizeof(mgmt->u.action.u.addba_resp));
  	mgmt->u.action.category = WLAN_CATEGORY_BACK;
@@ -118,16 +106,16 @@
  	mgmt->u.action.u.addba_resp.dialog_token = dialog_token;
  
  	capab = u16_encode_bits(amsdu, IEEE80211_ADDBA_PARAM_AMSDU_MASK);
-@@ -272,7 +275,7 @@ static void ieee80211_send_addba_resp(st
- void ___ieee80211_start_rx_ba_session(struct sta_info *sta,
- 				      u8 dialog_token, u16 timeout,
- 				      u16 start_seq_num, u16 ba_policy, u16 tid,
--				      u16 buf_size, bool tx, bool auto_seq,
-+				      u16 buf_size, bool tx, bool auto_seq, bool ndp,
- 				      const struct ieee80211_addba_ext_ie *addbaext)
+@@ -267,7 +270,7 @@ static void ieee80211_send_addba_resp(st
+ void __ieee80211_start_rx_ba_session(struct sta_info *sta,
+ 				     u8 dialog_token, u16 timeout,
+ 				     u16 start_seq_num, u16 ba_policy, u16 tid,
+-				     u16 buf_size, bool tx, bool auto_seq,
++				     u16 buf_size, bool tx, bool auto_seq, bool ndp,
+ 				     const u8 addba_ext_data)
  {
  	struct ieee80211_local *local = sta->sdata->local;
-@@ -283,6 +286,7 @@ void ___ieee80211_start_rx_ba_session(st
+@@ -278,6 +281,7 @@ void __ieee80211_start_rx_ba_session(str
  		.tid = tid,
  		.amsdu = false,
  		.timeout = timeout,
@@ -135,7 +123,7 @@
  		.ssn = start_seq_num,
  	};
  	int i, ret = -EOPNOTSUPP;
-@@ -305,6 +309,11 @@ void ___ieee80211_start_rx_ba_session(st
+@@ -302,6 +306,11 @@ void __ieee80211_start_rx_ba_session(str
  		goto end;
  	}
  
@@ -147,7 +135,7 @@
  	if (test_sta_flag(sta, WLAN_STA_BLOCK_BA)) {
  		ht_dbg(sta->sdata,
  		       "Suspend in progress - Denying ADDBA request (%pM tid %d)\n",
-@@ -439,6 +448,7 @@ void ___ieee80211_start_rx_ba_session(st
+@@ -433,6 +442,7 @@ void __ieee80211_start_rx_ba_session(str
  	tid_agg_rx->started = false;
  	tid_agg_rx->reorder_buf_filtered = 0;
  	tid_agg_rx->tid = tid;
@@ -155,67 +143,54 @@
  	tid_agg_rx->sta = sta;
  	status = WLAN_STATUS_SUCCESS;
  
-@@ -460,20 +470,20 @@ end:
+@@ -454,7 +464,7 @@ end:
  	if (tx)
  		ieee80211_send_addba_resp(sta, sta->sta.addr, tid,
  					  dialog_token, status, 1, buf_size,
--					  timeout, addbaext);
-+					  timeout, params.ndp, addbaext);
+-					  timeout, addba_ext_data);
++					  timeout, params.ndp, addba_ext_data);
  }
  
- static void __ieee80211_start_rx_ba_session(struct sta_info *sta,
- 					    u8 dialog_token, u16 timeout,
- 					    u16 start_seq_num, u16 ba_policy,
- 					    u16 tid, u16 buf_size, bool tx,
--					    bool auto_seq,
-+					    bool auto_seq, bool ndp,
- 					    const struct ieee80211_addba_ext_ie *addbaext)
+ void ieee80211_process_addba_request(struct ieee80211_local *local,
+@@ -464,6 +474,7 @@ void ieee80211_process_addba_request(str
  {
- 	mutex_lock(&sta->ampdu_mlme.mtx);
- 	___ieee80211_start_rx_ba_session(sta, dialog_token, timeout,
- 					 start_seq_num, ba_policy, tid,
--					 buf_size, tx, auto_seq, addbaext);
-+					 buf_size, tx, auto_seq, ndp, addbaext);
- 	mutex_unlock(&sta->ampdu_mlme.mtx);
- }
- 
-@@ -486,6 +496,7 @@ void ieee80211_process_addba_request(str
- 	struct ieee802_11_elems *elems = NULL;
- 	u8 dialog_token;
- 	int ies_len;
+ 	u16 capab, tid, timeout, ba_policy, buf_size, start_seq_num;
+ 	u8 dialog_token, addba_ext_data;
 +	bool ndp_ba;
  
  	/* extract session parameters from addba request frame */
  	dialog_token = mgmt->u.action.u.addba_req.dialog_token;
-@@ -497,6 +508,7 @@ void ieee80211_process_addba_request(str
+@@ -475,6 +486,7 @@ void ieee80211_process_addba_request(str
  	ba_policy = (capab & IEEE80211_ADDBA_PARAM_POLICY_MASK) >> 1;
  	tid = (capab & IEEE80211_ADDBA_PARAM_TID_MASK) >> 2;
  	buf_size = (capab & IEEE80211_ADDBA_PARAM_BUF_SIZE_MASK) >> 6;
 +	ndp_ba = (mgmt->u.action.u.addba_req.action_code == WLAN_ACTION_NDP_ADDBA_REQ);
  
- 	ies_len = len - offsetof(struct ieee80211_mgmt,
- 				 u.action.u.addba_req.variable);
-@@ -516,7 +528,7 @@ void ieee80211_process_addba_request(str
+ 	addba_ext_data =
+ 		ieee80211_retrieve_addba_ext_data(sta,
+@@ -486,7 +498,7 @@ void ieee80211_process_addba_request(str
  
  	__ieee80211_start_rx_ba_session(sta, dialog_token, timeout,
  					start_seq_num, ba_policy, tid,
--					buf_size, true, false,
-+					buf_size, true, false, ndp_ba,
- 					elems ? elems->addba_ext_ie : NULL);
- free:
- 	kfree(elems);
---- a/net/mac80211/agg-tx.c
-+++ b/net/mac80211/agg-tx.c
-@@ -59,7 +59,7 @@
+-					buf_size, true, false, addba_ext_data);
++					buf_size, true, false, ndp_ba, addba_ext_data);
+ }
+ 
+ void ieee80211_manage_rx_ba_offl(struct ieee80211_vif *vif,
+Index: backports-6.12.52/net/mac80211/agg-tx.c
+===================================================================
+--- backports-6.12.52.orig/net/mac80211/agg-tx.c
++++ backports-6.12.52/net/mac80211/agg-tx.c
+@@ -58,7 +58,7 @@
+  * complete.
   */
  
- static void ieee80211_send_addba_request(struct ieee80211_sub_if_data *sdata,
--					 const u8 *da, u16 tid,
-+					 const u8 *da, u16 tid, bool ndp,
+-static void ieee80211_send_addba_request(struct sta_info *sta, u16 tid,
++static void ieee80211_send_addba_request(struct sta_info *sta, u16 tid, bool ndp,
  					 u8 dialog_token, u16 start_seq_num,
  					 u16 agg_size, u16 timeout)
  {
-@@ -92,7 +92,8 @@ static void ieee80211_send_addba_request
+@@ -80,7 +80,8 @@ static void ieee80211_send_addba_request
  	skb_put(skb, 1 + sizeof(mgmt->u.action.u.addba_req));
  
  	mgmt->u.action.category = WLAN_CATEGORY_BACK;
@@ -225,7 +200,7 @@
  
  	mgmt->u.action.u.addba_req.dialog_token = dialog_token;
  	capab = IEEE80211_ADDBA_PARAM_AMSDU_MASK;
-@@ -340,6 +341,8 @@ int ___ieee80211_stop_tx_ba_session(stru
+@@ -331,6 +332,8 @@ int __ieee80211_stop_tx_ba_session(struc
  		return -ENOENT;
  	}
  
@@ -238,12 +213,12 @@
  	}
  
  	/* send AddBA request */
--	ieee80211_send_addba_request(sdata, sta->sta.addr, tid,
-+	ieee80211_send_addba_request(sdata, sta->sta.addr, tid, tid_tx->ndp,
- 				     tid_tx->dialog_token, tid_tx->ssn,
- 				     buf_size, tid_tx->timeout);
+-	ieee80211_send_addba_request(sta, tid, tid_tx->dialog_token,
++	ieee80211_send_addba_request(sta, tid, tid_tx->ndp, tid_tx->dialog_token,
+ 				     tid_tx->ssn, buf_size, tid_tx->timeout);
  
-@@ -498,10 +501,18 @@ void ieee80211_tx_ba_session_handle_star
+ 	WARN_ON(test_and_set_bit(HT_AGG_STATE_SENT_ADDBA, &tid_tx->state));
+@@ -497,10 +500,18 @@ void ieee80211_tx_ba_session_handle_star
  		.tid = tid,
  		.buf_size = 0,
  		.amsdu = false,
@@ -262,18 +237,17 @@
  	tid_tx = rcu_dereference_protected_tid_tx(sta, tid);
  
  	/*
-@@ -523,6 +534,10 @@ void ieee80211_tx_ba_session_handle_star
+@@ -520,6 +531,9 @@ void ieee80211_tx_ba_session_handle_star
+ 
  	params.ssn = sta->tid_seq[tid] >> 4;
  	ret = drv_ampdu_action(local, sdata, &params);
- 	tid_tx->ssn = params.ssn;
 +
 +	/* driver may clear this flag if it does not want NDP for this session */
 +	tid_tx->ndp = params.ndp;
-+
+ 	tid_tx->ssn = params.ssn;
  	if (ret == IEEE80211_AMPDU_TX_START_DELAY_ADDBA) {
  		return;
- 	} else if (ret == IEEE80211_AMPDU_TX_START_IMMEDIATE) {
-@@ -763,6 +778,7 @@ static void ieee80211_agg_tx_operational
+@@ -760,6 +774,7 @@ static void ieee80211_agg_tx_operational
  	tid_tx = rcu_dereference_protected_tid_tx(sta, tid);
  	params.buf_size = tid_tx->buf_size;
  	params.amsdu = tid_tx->amsdu;
@@ -281,7 +255,7 @@
  
  	ht_dbg(sta->sdata, "Aggregation is on for %pM tid %d\n",
  	       sta->sta.addr, tid);
-@@ -944,7 +960,7 @@ void ieee80211_stop_tx_ba_cb(struct sta_
+@@ -933,7 +948,7 @@ void ieee80211_stop_tx_ba_cb(struct sta_
  		ieee80211_agg_start_txq(sta, tid, false);
  
  	if (send_delba)
@@ -290,42 +264,46 @@
  			WLAN_BACK_INITIATOR, WLAN_REASON_QSTA_NOT_USE);
  }
  
-@@ -1003,6 +1019,13 @@ void ieee80211_process_addba_resp(struct
- 		goto out;
+@@ -999,6 +1014,13 @@ void ieee80211_process_addba_resp(struct
+ 		return;
  	}
  
 +	if ((tid_tx->ndp && mgmt->u.action.u.addba_resp.action_code != WLAN_ACTION_NDP_ADDBA_RESP) ||
-+			(!tid_tx->ndp && mgmt->u.action.u.addba_resp.action_code != WLAN_ACTION_ADDBA_RESP)) {
++	    (!tid_tx->ndp && mgmt->u.action.u.addba_resp.action_code != WLAN_ACTION_ADDBA_RESP)) {
 +		ht_dbg(sta->sdata, "wrong addBA response action code, %d ndp %d\n",
 +				mgmt->u.action.u.addba_resp.action_code, tid_tx->ndp);
-+		goto out;
++		return;
 +	}
 +
  	del_timer_sync(&tid_tx->addba_resp_timer);
  
  	ht_dbg(sta->sdata, "switched off addBA timer for %pM tid %d\n",
---- a/net/mac80211/debugfs.c
-+++ b/net/mac80211/debugfs.c
-@@ -496,6 +496,7 @@ static const char *hw_flag_names[] = {
- 	FLAG(SUPPORTS_CONC_MON_RX_DECAP),
- 	FLAG(DETECTS_COLOR_COLLISION),
- 	FLAG(MLO_MCAST_MULTI_LINK_TX),
+Index: backports-6.12.52/net/mac80211/debugfs.c
+===================================================================
+--- backports-6.12.52.orig/net/mac80211/debugfs.c
++++ backports-6.12.52/net/mac80211/debugfs.c
+@@ -510,6 +510,7 @@ static const char *hw_flag_names[] = {
+ 	FLAG(DISALLOW_PUNCTURING_5GHZ),
+ 	FLAG(HANDLES_QUIET_CSA),
+ 	FLAG(STRICT),
 +	FLAG(SUPPORTS_NDP_BLOCKACK),
  #undef FLAG
  };
  
---- a/net/mac80211/ht.c
-+++ b/net/mac80211/ht.c
-@@ -379,7 +379,7 @@ void ieee80211_ba_session_work(struct wo
+Index: backports-6.12.52/net/mac80211/ht.c
+===================================================================
+--- backports-6.12.52.orig/net/mac80211/ht.c
++++ backports-6.12.52/net/mac80211/ht.c
+@@ -379,7 +379,7 @@ void ieee80211_ba_session_work(struct wi
  				       sta->ampdu_mlme.tid_rx_manage_offl))
- 			___ieee80211_start_rx_ba_session(sta, 0, 0, 0, 1, tid,
- 							 IEEE80211_MAX_AMPDU_BUF_HT,
--							 false, true, NULL);
-+							 false, true, false, NULL);
+ 			__ieee80211_start_rx_ba_session(sta, 0, 0, 0, 1, tid,
+ 							IEEE80211_MAX_AMPDU_BUF_HT,
+-							false, true, 0);
++							false, true, false, 0);
  
  		if (test_and_clear_bit(tid + IEEE80211_NUM_TIDS,
  				       sta->ampdu_mlme.tid_rx_manage_offl))
-@@ -463,7 +463,7 @@ void ieee80211_ba_session_work(struct wo
+@@ -454,7 +454,7 @@ void ieee80211_ba_session_work(struct wi
  }
  
  void ieee80211_send_delba(struct ieee80211_sub_if_data *sdata,
@@ -334,7 +312,7 @@
  			  u16 initiator, u16 reason_code)
  {
  	struct ieee80211_local *local = sdata->local;
-@@ -494,7 +494,7 @@ void ieee80211_send_delba(struct ieee802
+@@ -472,7 +472,7 @@ void ieee80211_send_delba(struct ieee802
  	skb_put(skb, 1 + sizeof(mgmt->u.action.u.delba));
  
  	mgmt->u.action.category = WLAN_CATEGORY_BACK;
@@ -343,9 +321,11 @@
  	params = (u16)(initiator << 11); 	/* bit 11 initiator */
  	params |= (u16)(tid << 12); 		/* bit 15:12 TID number */
  
---- a/net/mac80211/ieee80211_i.h
-+++ b/net/mac80211/ieee80211_i.h
-@@ -2043,7 +2043,7 @@ bool ieee80211_ht_cap_ie_to_sta_ht_cap(s
+Index: backports-6.12.52/net/mac80211/ieee80211_i.h
+===================================================================
+--- backports-6.12.52.orig/net/mac80211/ieee80211_i.h
++++ backports-6.12.52/net/mac80211/ieee80211_i.h
+@@ -2141,7 +2141,7 @@ bool ieee80211_ht_cap_ie_to_sta_ht_cap(s
  				       const struct ieee80211_ht_cap *ht_cap_ie,
  				       struct link_sta_info *link_sta);
  void ieee80211_send_delba(struct ieee80211_sub_if_data *sdata,
@@ -354,18 +334,20 @@
  			  u16 initiator, u16 reason_code);
  int ieee80211_send_smps_action(struct ieee80211_sub_if_data *sdata,
  			       enum ieee80211_smps_mode smps, const u8 *da,
-@@ -2058,7 +2058,7 @@ void __ieee80211_stop_rx_ba_session(stru
- void ___ieee80211_start_rx_ba_session(struct sta_info *sta,
- 				      u8 dialog_token, u16 timeout,
- 				      u16 start_seq_num, u16 ba_policy, u16 tid,
--				      u16 buf_size, bool tx, bool auto_seq,
-+				      u16 buf_size, bool tx, bool auto_seq, bool ndp,
- 				      const struct ieee80211_addba_ext_ie *addbaext);
+@@ -2159,7 +2159,7 @@ void __ieee80211_stop_rx_ba_session(stru
+ void __ieee80211_start_rx_ba_session(struct sta_info *sta,
+ 				     u8 dialog_token, u16 timeout,
+ 				     u16 start_seq_num, u16 ba_policy, u16 tid,
+-				     u16 buf_size, bool tx, bool auto_seq,
++				     u16 buf_size, bool tx, bool auto_seq, bool ndp,
+ 				     const u8 addba_ext_data);
  void ieee80211_sta_tear_down_BA_sessions(struct sta_info *sta,
  					 enum ieee80211_agg_stop_reason reason);
---- a/net/mac80211/iface.c
-+++ b/net/mac80211/iface.c
-@@ -1496,14 +1496,17 @@ static void ieee80211_iface_process_skb(
+Index: backports-6.12.52/net/mac80211/iface.c
+===================================================================
+--- backports-6.12.52.orig/net/mac80211/iface.c
++++ backports-6.12.52/net/mac80211/iface.c
+@@ -1516,14 +1516,17 @@ static void ieee80211_iface_process_skb(
  		if (sta) {
  			switch (mgmt->u.action.u.addba_req.action_code) {
  			case WLAN_ACTION_ADDBA_REQ:
@@ -383,9 +365,11 @@
  				ieee80211_process_delba(sdata, sta,
  							mgmt, len);
  				break;
---- a/net/mac80211/rx.c
-+++ b/net/mac80211/rx.c
-@@ -1382,7 +1382,7 @@ static void ieee80211_rx_reorder_ampdu(s
+Index: backports-6.12.52/net/mac80211/rx.c
+===================================================================
+--- backports-6.12.52.orig/net/mac80211/rx.c
++++ backports-6.12.52/net/mac80211/rx.c
+@@ -1381,7 +1381,7 @@ static void ieee80211_rx_reorder_ampdu(s
  		if (ack_policy == IEEE80211_QOS_CTL_ACK_POLICY_BLOCKACK &&
  		    !test_bit(tid, rx->sta->ampdu_mlme.agg_session_valid) &&
  		    !test_and_set_bit(tid, rx->sta->ampdu_mlme.unexpected_agg))
@@ -394,7 +378,7 @@
  					     WLAN_BACK_RECIPIENT,
  					     WLAN_REASON_QSTA_REQUIRE_SETUP);
  		goto dont_reorder;
-@@ -3218,7 +3218,7 @@ ieee80211_rx_h_ctrl(struct ieee80211_rx_
+@@ -3286,7 +3286,7 @@ ieee80211_rx_h_ctrl(struct ieee80211_rx_
  
  		if (!test_bit(tid, rx->sta->ampdu_mlme.agg_session_valid) &&
  		    !test_and_set_bit(tid, rx->sta->ampdu_mlme.unexpected_agg))
@@ -403,7 +387,7 @@
  					     WLAN_BACK_RECIPIENT,
  					     WLAN_REASON_QSTA_REQUIRE_SETUP);
  
-@@ -3623,16 +3623,19 @@ ieee80211_rx_h_action(struct ieee80211_r
+@@ -3692,16 +3692,19 @@ ieee80211_rx_h_action(struct ieee80211_r
  
  		switch (mgmt->u.action.u.addba_req.action_code) {
  		case WLAN_ACTION_ADDBA_REQ:
@@ -423,9 +407,11 @@
  			if (len < (IEEE80211_MIN_ACTION_SIZE +
  				   sizeof(mgmt->u.action.u.delba)))
  				goto invalid;
---- a/net/mac80211/sta_info.h
-+++ b/net/mac80211/sta_info.h
-@@ -171,6 +171,7 @@ struct sta_info;
+Index: backports-6.12.52/net/mac80211/sta_info.h
+===================================================================
+--- backports-6.12.52.orig/net/mac80211/sta_info.h
++++ backports-6.12.52/net/mac80211/sta_info.h
+@@ -172,6 +172,7 @@ struct sta_info;
   * @bar_pending: BAR needs to be re-sent
   * @amsdu: support A-MSDU withing A-MDPU
   * @ssn: starting sequence number of the session
@@ -433,7 +419,7 @@
   *
   * This structure's lifetime is managed by RCU, assignments to
   * the array holding it must hold the aggregation mutex.
-@@ -199,6 +200,7 @@ struct tid_ampdu_tx {
+@@ -200,6 +201,7 @@ struct tid_ampdu_tx {
  	u16 failed_bar_ssn;
  	bool bar_pending;
  	bool amsdu;
@@ -441,7 +427,7 @@
  	u8 tid;
  };
  
-@@ -226,6 +228,7 @@ struct tid_ampdu_tx {
+@@ -227,6 +229,7 @@ struct tid_ampdu_tx {
   *	and ssn.
   * @removed: this session is removed (but might have been found due to RCU)
   * @started: this session has started (head ssn or higher was received)
@@ -449,7 +435,7 @@
   *
   * This structure's lifetime is managed by RCU, assignments to
   * the array holding it must hold the aggregation mutex.
-@@ -253,7 +256,8 @@ struct tid_ampdu_rx {
+@@ -254,7 +257,8 @@ struct tid_ampdu_rx {
  	u8 tid;
  	u8 auto_seq:1,
  	   removed:1,

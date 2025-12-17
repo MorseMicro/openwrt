@@ -1,8 +1,8 @@
-Index: backports-6.1.145-1/net/mac80211/mesh.h
+Index: backports-6.12.52/net/mac80211/mesh.h
 ===================================================================
---- backports-6.1.145-1.orig/net/mac80211/mesh.h
-+++ backports-6.1.145-1/net/mac80211/mesh.h
-@@ -168,7 +168,13 @@ struct mesh_rmc {
+--- backports-6.12.52.orig/net/mac80211/mesh.h
++++ backports-6.12.52/net/mac80211/mesh.h
+@@ -229,7 +229,13 @@ struct mesh_rmc {
  #define MESH_MAX_MPATHS		1024
  
  /* Number of frames buffered per destination for unresolved destinations */
@@ -17,10 +17,10 @@ Index: backports-6.1.145-1/net/mac80211/mesh.h
  
  /* Public interfaces */
  /* Various */
-Index: backports-6.1.145-1/net/mac80211/mesh_hwmp.c
+Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
 ===================================================================
---- backports-6.1.145-1.orig/net/mac80211/mesh_hwmp.c
-+++ backports-6.1.145-1/net/mac80211/mesh_hwmp.c
+--- backports-6.12.52.orig/net/mac80211/mesh_hwmp.c
++++ backports-6.12.52/net/mac80211/mesh_hwmp.c
 @@ -132,13 +132,13 @@ static int mesh_path_sel_frame_tx(enum m
  
  	switch (action) {
@@ -37,7 +37,7 @@ Index: backports-6.1.145-1/net/mac80211/mesh_hwmp.c
  		ie_len = 31;
  		pos = skb_put(skb, 2 + ie_len);
  		*pos++ = WLAN_EID_PREP;
-@@ -373,6 +373,32 @@ static bool is_metric_better(u32 x, u32
+@@ -384,6 +384,32 @@ static bool is_metric_better(u32 x, u32
  	return (x < y) && (x < (y - x / 10));
  }
  
@@ -70,7 +70,7 @@ Index: backports-6.1.145-1/net/mac80211/mesh_hwmp.c
  /**
   * hwmp_route_info_get - Update routing info to originator and transmitter
   *
-@@ -397,6 +423,7 @@ static u32 hwmp_route_info_get(struct ie
+@@ -408,6 +434,7 @@ static u32 hwmp_route_info_get(struct ie
  	struct ieee80211_local *local = sdata->local;
  	struct mesh_path *mpath;
  	struct sta_info *sta;
@@ -78,21 +78,21 @@ Index: backports-6.1.145-1/net/mac80211/mesh_hwmp.c
  	bool fresh_info;
  	const u8 *orig_addr, *ta;
  	u32 orig_sn, orig_metric;
-@@ -404,6 +431,7 @@ static u32 hwmp_route_info_get(struct ie
- 	u32 last_hop_metric, new_metric;
+@@ -416,6 +443,7 @@ static u32 hwmp_route_info_get(struct ie
+ 	bool flush_mpath = false;
  	bool process = true;
  	u8 hopcount;
 +	bool new_path = false;
  
  	rcu_read_lock();
  	sta = sta_info_get(sdata, mgmt->sa);
-@@ -455,22 +483,26 @@ static u32 hwmp_route_info_get(struct ie
+@@ -467,22 +495,26 @@ static u32 hwmp_route_info_get(struct ie
  		mpath = mesh_path_lookup(sdata, orig_addr);
  		if (mpath) {
  			spin_lock_bh(&mpath->state_lock);
 +			mhwmp_dbg(sdata, "%s from:%pM->%pM new_metric:%d metric:%d hops:%d \n",
-+				action ? "PREP" : "PREQ", orig_addr, mgmt->sa, new_metric,
-+				mpath->metric, hopcount);
++					action ? "PREP" : "PREQ", orig_addr, mgmt->sa, new_metric,
++					mpath->metric, hopcount);
  			if (mpath->flags & MESH_PATH_FIXED)
  				fresh_info = false;
 -			else if ((mpath->flags & MESH_PATH_ACTIVE) &&
@@ -104,11 +104,11 @@ Index: backports-6.1.145-1/net/mac80211/mesh_hwmp.c
 -						      sta ?
 -					      !is_metric_better(new_metric, mpath->metric) :
 -					      new_metric >= mpath->metric))) {
-+					(mpath->metric &&
-+					(rcu_access_pointer(mpath->next_hop) != sta) &&
-+					(mult_frac(new_metric, 10, 9) >= mpath->metric))) {
++				(mpath->metric &&
++				 (rcu_access_pointer(mpath->next_hop) != sta) &&
++				 (mult_frac(new_metric, 10, 9) >= mpath->metric))) {
 +					mhwmp_dbg(sdata, "skip long path orig:%pM sa:%pM \n",
-+						orig_addr, mgmt->sa);
++							orig_addr, mgmt->sa);
  					process = false;
  					fresh_info = false;
  				}
@@ -119,7 +119,7 @@ Index: backports-6.1.145-1/net/mac80211/mesh_hwmp.c
  				have_sn = mpath->flags & MESH_PATH_SN_VALID;
  				newer_sn = have_sn && SN_GT(orig_sn, mpath->sn);
  				bounced = have_sn &&
-@@ -484,7 +516,13 @@ static u32 hwmp_route_info_get(struct ie
+@@ -496,7 +528,13 @@ static u32 hwmp_route_info_get(struct ie
  					/* if SN is way different than what
  					 * we had then assume the other side
  					 * rebooted or restarted */;
@@ -133,7 +133,7 @@ Index: backports-6.1.145-1/net/mac80211/mesh_hwmp.c
  					process = false;
  					fresh_info = false;
  				}
-@@ -496,6 +534,9 @@ static u32 hwmp_route_info_get(struct ie
+@@ -508,6 +546,9 @@ static u32 hwmp_route_info_get(struct ie
  				return 0;
  			}
  			spin_lock_bh(&mpath->state_lock);
@@ -143,7 +143,7 @@ Index: backports-6.1.145-1/net/mac80211/mesh_hwmp.c
  		}
  
  		if (fresh_info) {
-@@ -505,6 +546,14 @@ static u32 hwmp_route_info_get(struct ie
+@@ -519,6 +560,14 @@ static u32 hwmp_route_info_get(struct ie
  			mpath->flags |= MESH_PATH_SN_VALID;
  			mpath->metric = new_metric;
  			mpath->sn = orig_sn;
@@ -158,7 +158,7 @@ Index: backports-6.1.145-1/net/mac80211/mesh_hwmp.c
  			mpath->exp_time = time_after(mpath->exp_time, exp_time)
  					  ?  mpath->exp_time : exp_time;
  			mpath->hop_count = hopcount;
-@@ -513,6 +562,11 @@ static u32 hwmp_route_info_get(struct ie
+@@ -529,6 +578,11 @@ static u32 hwmp_route_info_get(struct ie
  			ewma_mesh_fail_avg_init(&sta->mesh->fail_avg);
  			/* init it at a low value - 0 start is tricky */
  			ewma_mesh_fail_avg_add(&sta->mesh->fail_avg, 1);
@@ -170,7 +170,7 @@ Index: backports-6.1.145-1/net/mac80211/mesh_hwmp.c
  			mesh_path_tx_pending(mpath);
  			/* draft says preq_id should be saved to, but there does
  			 * not seem to be any use for it, skipping by now
-@@ -522,8 +576,11 @@ static u32 hwmp_route_info_get(struct ie
+@@ -538,8 +592,11 @@ static u32 hwmp_route_info_get(struct ie
  	}
  
  	/* Update and check transmitter routing info */
@@ -183,7 +183,7 @@ Index: backports-6.1.145-1/net/mac80211/mesh_hwmp.c
  		fresh_info = false;
  	else {
  		fresh_info = true;
-@@ -538,11 +595,14 @@ static u32 hwmp_route_info_get(struct ie
+@@ -554,11 +611,14 @@ static u32 hwmp_route_info_get(struct ie
  				       last_hop_metric > mpath->metric))))
  				fresh_info = false;
  		} else {
@@ -198,10 +198,11 @@ Index: backports-6.1.145-1/net/mac80211/mesh_hwmp.c
  			spin_lock_bh(&mpath->state_lock);
  		}
  
-@@ -551,6 +611,13 @@ static u32 hwmp_route_info_get(struct ie
- 				mpath->path_change_count++;
+@@ -569,6 +629,14 @@ static u32 hwmp_route_info_get(struct ie
+ 			}
  			mesh_path_assign_nexthop(mpath, sta);
  			mpath->metric = last_hop_metric;
++			/* re-confirm if new paths are the optimal */
 +			if (new_path) {
 +				/* Overwrite expiry time with smaller value to re-confirm
 +				 * if new path is optimal, with path refresh operation */
@@ -212,7 +213,7 @@ Index: backports-6.1.145-1/net/mac80211/mesh_hwmp.c
  			mpath->exp_time = time_after(mpath->exp_time, exp_time)
  					  ?  mpath->exp_time : exp_time;
  			mpath->hop_count = 1;
-@@ -559,6 +626,11 @@ static u32 hwmp_route_info_get(struct ie
+@@ -579,6 +647,11 @@ static u32 hwmp_route_info_get(struct ie
  			ewma_mesh_fail_avg_init(&sta->mesh->fail_avg);
  			/* init it at a low value - 0 start is tricky */
  			ewma_mesh_fail_avg_add(&sta->mesh->fail_avg, 1);
@@ -224,7 +225,7 @@ Index: backports-6.1.145-1/net/mac80211/mesh_hwmp.c
  			mesh_path_tx_pending(mpath);
  		} else
  			spin_unlock_bh(&mpath->state_lock);
-@@ -596,7 +668,7 @@ static void hwmp_preq_frame_process(stru
+@@ -616,7 +689,7 @@ static void hwmp_preq_frame_process(stru
  	mhwmp_dbg(sdata, "received PREQ from %pM\n", orig_addr);
  
  	if (ether_addr_equal(target_addr, sdata->vif.addr)) {
@@ -233,7 +234,7 @@ Index: backports-6.1.145-1/net/mac80211/mesh_hwmp.c
  		forward = false;
  		reply = true;
  		target_metric = 0;
-@@ -803,6 +875,10 @@ static void hwmp_perr_frame_process(stru
+@@ -823,6 +896,10 @@ static void hwmp_perr_frame_process(stru
  		    !(mpath->flags & MESH_PATH_FIXED) &&
  		    (!(mpath->flags & MESH_PATH_SN_VALID) ||
  		    SN_GT(target_sn, mpath->sn)  || target_sn == 0)) {
@@ -244,7 +245,7 @@ Index: backports-6.1.145-1/net/mac80211/mesh_hwmp.c
  			mpath->flags &= ~MESH_PATH_ACTIVE;
  			if (target_sn != 0)
  				mpath->sn = target_sn;
-@@ -1088,6 +1164,7 @@ void mesh_path_start_discovery(struct ie
+@@ -1108,6 +1185,7 @@ void mesh_path_start_discovery(struct ie
  			mpath->flags |= MESH_PATH_RESOLVING;
  			mpath->discovery_retries = 0;
  			mpath->discovery_timeout = disc_timeout_jiff(sdata);
@@ -252,7 +253,7 @@ Index: backports-6.1.145-1/net/mac80211/mesh_hwmp.c
  		}
  	} else if (!(mpath->flags & MESH_PATH_RESOLVING) ||
  			mpath->flags & MESH_PATH_RESOLVED) {
-@@ -1168,6 +1245,7 @@ int mesh_nexthop_resolve(struct ieee8021
+@@ -1188,6 +1266,7 @@ int mesh_nexthop_resolve(struct ieee8021
  	/* no nexthop found, start resolving */
  	mpath = mesh_path_lookup(sdata, target_addr);
  	if (!mpath) {
@@ -260,7 +261,7 @@ Index: backports-6.1.145-1/net/mac80211/mesh_hwmp.c
  		mpath = mesh_path_add(sdata, target_addr);
  		if (IS_ERR(mpath)) {
  			mesh_path_discard_frame(sdata, skb);
-@@ -1175,13 +1253,16 @@ int mesh_nexthop_resolve(struct ieee8021
+@@ -1195,13 +1274,16 @@ int mesh_nexthop_resolve(struct ieee8021
  		}
  	}
  
@@ -275,17 +276,18 @@ Index: backports-6.1.145-1/net/mac80211/mesh_hwmp.c
  
 -	if (skb_queue_len(&mpath->frame_queue) >= MESH_FRAME_QUEUE_LEN)
 +	if (skb_queue_len(&mpath->frame_queue) >= MESH_FRAME_QUEUE_LEN) {
-+		IEEE80211_IFSTA_MESH_CTR_INC(&sdata->u.mesh, dropped_frames_no_route);
++        IEEE80211_IFSTA_MESH_CTR_INC(&sdata->u.mesh, dropped_frames_no_route);
  		skb_to_free = skb_dequeue(&mpath->frame_queue);
 -
 +	}
  	info->control.flags |= IEEE80211_TX_INTCFL_NEED_TXPROCESSING;
  	ieee80211_set_qos_hdr(sdata, skb);
  	skb_queue_tail(&mpath->frame_queue, skb);
-@@ -1226,6 +1307,39 @@ static int mesh_nexthop_lookup_nolearn(s
+@@ -1245,18 +1327,37 @@ static int mesh_nexthop_lookup_nolearn(s
+ 	return 0;
  }
  
- /**
++/**
 + * Checks if the given mpath is optimal.
 + *
 + * @param mpath: Pointer to the mpath structure containing path data.
@@ -297,17 +299,23 @@ Index: backports-6.1.145-1/net/mac80211/mesh_hwmp.c
 +    return (mpath->metric <= (mpath->hop_count * BEST_SINGLE_HOP_METRIC_HALOW));
 +}
 +
-+void mesh_path_refresh(struct ieee80211_sub_if_data *sdata,
-+		       struct mesh_path *mpath, const u8 *addr)
-+{
+ void mesh_path_refresh(struct ieee80211_sub_if_data *sdata,
+ 		       struct mesh_path *mpath, const u8 *addr)
+ {
+-	if (mpath->flags & (MESH_PATH_REQ_QUEUED | MESH_PATH_FIXED |
+-			    MESH_PATH_RESOLVING))
 +	unsigned long refresh_time_jif = msecs_to_jiffies(sdata->u.mesh.mshcfg.path_refresh_time);
 +
 +	if ((mpath->flags & (MESH_PATH_REQ_QUEUED | MESH_PATH_FIXED | MESH_PATH_RESOLVING)))
-+		return;
-+
+ 		return;
+ 
+-	if (time_after(jiffies,
+-		       mpath->exp_time -
+-		       msecs_to_jiffies(sdata->u.mesh.mshcfg.path_refresh_time)) &&
+-	    (!addr || ether_addr_equal(sdata->vif.addr, addr)))
 +	if(time_after(jiffies, (mpath->exp_time - refresh_time_jif)) &&
 +	   (!addr || ether_addr_equal(sdata->vif.addr, addr)))
-+		mesh_queue_preq(mpath, PREQ_Q_F_START | PREQ_Q_F_REFRESH);
+ 		mesh_queue_preq(mpath, PREQ_Q_F_START | PREQ_Q_F_REFRESH);
 +
 +	if (hwmp_is_mpath_optimal(mpath)) {
 +		/* Refresh path, if path is being actively used & optimal */
@@ -316,28 +324,10 @@ Index: backports-6.1.145-1/net/mac80211/mesh_hwmp.c
 +		mpath->exp_time = time_after(mpath->exp_time, (exp_time + jiffies)) ?
 +			mpath->exp_time : (exp_time + jiffies);
 +	}
-+}
-+
-+/**
-  * mesh_nexthop_lookup - put the appropriate next hop on a mesh frame. Calling
-  * this function is considered "using" the associated mpath, so preempt a path
-  * refresh if this mpath expires soon.
-@@ -1252,13 +1366,7 @@ int mesh_nexthop_lookup(struct ieee80211
- 	if (!mpath || !(mpath->flags & MESH_PATH_ACTIVE))
- 		return -ENOENT;
+ }
  
--	if (time_after(jiffies,
--		       mpath->exp_time -
--		       msecs_to_jiffies(sdata->u.mesh.mshcfg.path_refresh_time)) &&
--	    ether_addr_equal(sdata->vif.addr, hdr->addr4) &&
--	    !(mpath->flags & MESH_PATH_RESOLVING) &&
--	    !(mpath->flags & MESH_PATH_FIXED))
--		mesh_queue_preq(mpath, PREQ_Q_F_START | PREQ_Q_F_REFRESH);
-+	mesh_path_refresh(sdata, mpath, hdr->addr4);
- 
- 	next_hop = rcu_dereference(mpath->next_hop);
- 	if (next_hop) {
-@@ -1287,10 +1395,11 @@ void mesh_path_timer(struct timer_list *
+ /**
+@@ -1317,10 +1418,11 @@ void mesh_path_timer(struct timer_list *
  		spin_unlock_bh(&mpath->state_lock);
  	} else if (mpath->discovery_retries < max_preq_retries(sdata)) {
  		++mpath->discovery_retries;
@@ -351,11 +341,11 @@ Index: backports-6.1.145-1/net/mac80211/mesh_hwmp.c
  	} else {
  		mpath->flags &= ~(MESH_PATH_RESOLVING |
  				  MESH_PATH_RESOLVED |
-Index: backports-6.1.145-1/net/mac80211/mesh_pathtbl.c
+Index: backports-6.12.52/net/mac80211/mesh_pathtbl.c
 ===================================================================
---- backports-6.1.145-1.orig/net/mac80211/mesh_pathtbl.c
-+++ backports-6.1.145-1/net/mac80211/mesh_pathtbl.c
-@@ -490,6 +490,12 @@ void mesh_plink_broken(struct sta_info *
+--- backports-6.12.52.orig/net/mac80211/mesh_pathtbl.c
++++ backports-6.12.52/net/mac80211/mesh_pathtbl.c
+@@ -779,6 +779,12 @@ void mesh_plink_broken(struct sta_info *
  		if (rcu_access_pointer(mpath->next_hop) == sta &&
  		    mpath->flags & MESH_PATH_ACTIVE &&
  		    !(mpath->flags & MESH_PATH_FIXED)) {
@@ -368,11 +358,11 @@ Index: backports-6.1.145-1/net/mac80211/mesh_pathtbl.c
  			spin_lock_bh(&mpath->state_lock);
  			mpath->flags &= ~MESH_PATH_ACTIVE;
  			++mpath->sn;
-Index: backports-6.1.145-1/net/mac80211/rx.c
+Index: backports-6.12.52/net/mac80211/rx.c
 ===================================================================
---- backports-6.1.145-1.orig/net/mac80211/rx.c
-+++ backports-6.1.145-1/net/mac80211/rx.c
-@@ -2871,19 +2871,12 @@ ieee80211_rx_mesh_data(struct ieee80211_
+--- backports-6.12.52.orig/net/mac80211/rx.c
++++ backports-6.12.52/net/mac80211/rx.c
+@@ -2992,21 +2992,13 @@ ieee80211_rx_mesh_data(struct ieee80211_
  		memcpy(fwd_hdr->addr2, sdata->vif.addr, ETH_ALEN);
  		/* update power mode indication when forwarding */
  		ieee80211_mps_set_frame_flags(sdata, NULL, fwd_hdr);
@@ -393,12 +383,14 @@ Index: backports-6.1.145-1/net/mac80211/rx.c
 +		/* skb queued: don't free */
 +		return RX_QUEUED;
  	}
- 
+-
  	IEEE80211_IFSTA_MESH_CTR_INC(ifmsh, fwded_frames);
-Index: backports-6.1.145-1/net/wireless/mesh.c
+ 	ieee80211_set_qos_hdr(sdata, fwd_skb);
+ 	ieee80211_add_pending_skb(local, fwd_skb);
+Index: backports-6.12.52/net/wireless/mesh.c
 ===================================================================
---- backports-6.1.145-1.orig/net/wireless/mesh.c
-+++ backports-6.1.145-1/net/wireless/mesh.c
+--- backports-6.12.52.orig/net/wireless/mesh.c
++++ backports-6.12.52/net/wireless/mesh.c
 @@ -18,7 +18,7 @@
  #define MESH_CONF_T 		100
  #define MESH_HOLD_T 		100

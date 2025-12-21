@@ -625,13 +625,17 @@ define KernelPackage/video-core
   TITLE=Video4Linux support
   DEPENDS:=+PACKAGE_kmod-i2c-core:kmod-i2c-core +kmod-media-controller
   KCONFIG:= \
-	CONFIG_MEDIA_CAMERA_SUPPORT=y \
-	CONFIG_VIDEO_DEV \
-	CONFIG_V4L_PLATFORM_DRIVERS=y \
-	CONFIG_MEDIA_PLATFORM_DRIVERS=y
+    CONFIG_MEDIA_CAMERA_SUPPORT=y \
+    CONFIG_MEDIA_CONTROLLER=y \
+    CONFIG_MEDIA_CONTROLLER_DVB=n \
+    CONFIG_VIDEO_DEV \
+    CONFIG_VIDEO_V4L2_SUBDEV_API=y \
+    CONFIG_V4L_PLATFORM_DRIVERS=y \
+    CONFIG_MEDIA_PLATFORM_DRIVERS=y
   FILES:= \
-	$(LINUX_DIR)/drivers/media/$(V4L2_DIR)/videodev.ko
-  AUTOLOAD:=$(call AutoLoad,60,videodev)
+    $(LINUX_DIR)/drivers/media/$(V4L2_DIR)/videodev.ko \
+    $(LINUX_DIR)/drivers/media/$(V4L2_DIR)/v4l2-dv-timings.ko
+  AUTOLOAD:=$(call AutoLoad,60,videodev v4l2-common v4l2-dv-timings)
 endef
 
 define KernelPackage/video-core/description
@@ -699,6 +703,21 @@ define KernelPackage/video-fwnode
 endef
 
 $(eval $(call KernelPackage,video-fwnode))
+
+define KernelPackage/videobuf2-dma-contig
+  TITLE:=videobuf2-dma-contig
+  DEPENDS:= +kmod-video-videobuf2
+  KCONFIG:= CONFIG_VIDEOBUF2_DMA_CONTIG
+  FILES:= $(LINUX_DIR)/drivers/media/common/videobuf2/videobuf2-dma-contig.ko
+  AUTOLOAD:=$(call AutoLoad,65,videobuf2-dma-contig)
+  $(call AddDepends/video)
+endef
+
+define KernelPackage/videobuf2-dma-contig/description
+ DMA contig memory allocator for videobuf2
+endef
+
+$(eval $(call KernelPackage,videobuf2-dma-contig))
 
 define KernelPackage/video-cpia2
   TITLE:=CPIA2 video driver

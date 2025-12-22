@@ -9,10 +9,10 @@ Subject: [PATCH] Add default brightness and intensity to leds-pwm-multicolor
  include/linux/leds.h                |  1 +
  3 files changed, 44 insertions(+), 1 deletion(-)
 
-Index: linux-5.15.150/drivers/leds/led-class-multicolor.c
+Index: linux-6.6.86/drivers/leds/led-class-multicolor.c
 ===================================================================
---- linux-5.15.150.orig/drivers/leds/led-class-multicolor.c
-+++ linux-5.15.150/drivers/leds/led-class-multicolor.c
+--- linux-6.6.86.orig/drivers/leds/led-class-multicolor.c
++++ linux-6.6.86/drivers/leds/led-class-multicolor.c
 @@ -3,6 +3,7 @@
  // Copyright (C) 2019-20 Texas Instruments Incorporated - http://www.ti.com/
  // Author: Dan Murphy <dmurphy@ti.com>
@@ -67,18 +67,17 @@ Index: linux-5.15.150/drivers/leds/led-class-multicolor.c
  	return led_classdev_register_ext(parent, led_cdev, init_data);
  }
  EXPORT_SYMBOL_GPL(led_classdev_multicolor_register_ext);
-Index: linux-5.15.150/drivers/leds/led-class.c
+Index: linux-6.6.86/drivers/leds/led-class.c
 ===================================================================
---- linux-5.15.150.orig/drivers/leds/led-class.c
-+++ linux-5.15.150/drivers/leds/led-class.c
-@@ -362,6 +362,16 @@ int led_classdev_register_ext(struct dev
- 			if (fwnode_property_present(init_data->fwnode,
- 						    "retain-state-shutdown"))
- 				led_cdev->flags |= LED_RETAIN_AT_SHUTDOWN;
+--- linux-6.6.86.orig/drivers/leds/led-class.c
++++ linux-6.6.86/drivers/leds/led-class.c
+@@ -502,6 +502,15 @@ int led_classdev_register_ext(struct dev
+ 			if (fwnode_property_present(init_data->fwnode, "color"))
+ 				fwnode_property_read_u32(init_data->fwnode, "color",
+ 							 &led_cdev->color);
 +
 +			if (fwnode_property_present(init_data->fwnode,
-+						     "default-brightness"))
-+			{
++				"default-brightness")) {
 +				fwnode_property_read_u32(
 +					init_data->fwnode,
 +					"default-brightness",
@@ -88,26 +87,25 @@ Index: linux-5.15.150/drivers/leds/led-class.c
  		}
  	} else {
  		proposed_name = led_cdev->name;
-@@ -412,8 +422,8 @@ int led_classdev_register_ext(struct dev
- 
+@@ -554,7 +563,8 @@ int led_classdev_register_ext(struct dev
  	if (!led_cdev->max_brightness)
  		led_cdev->max_brightness = LED_FULL;
--
+ 
 -	led_update_brightness(led_cdev);
 +	if (!led_cdev->default_brightness)
 +		led_update_brightness(led_cdev);
  
  	led_init_core(led_cdev);
  
-Index: linux-5.15.150/include/linux/leds.h
+Index: linux-6.6.86/include/linux/leds.h
 ===================================================================
---- linux-5.15.150.orig/include/linux/leds.h
-+++ linux-5.15.150/include/linux/leds.h
-@@ -81,6 +81,7 @@ struct led_classdev {
+--- linux-6.6.86.orig/include/linux/leds.h
++++ linux-6.6.86/include/linux/leds.h
+@@ -100,6 +100,7 @@ struct led_classdev {
  	const char		*name;
  	unsigned int brightness;
  	unsigned int max_brightness;
 +	bool default_brightness;
+ 	unsigned int color;
  	int			 flags;
  
- 	/* Lower 16 bits reflect status */

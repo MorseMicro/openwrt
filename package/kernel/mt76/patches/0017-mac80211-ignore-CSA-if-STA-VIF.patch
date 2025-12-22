@@ -26,23 +26,23 @@ Thu Nov 20 03:59:40 2025 kern.warn kernel: [  902.812257] [<82c944f8>] mt76_csa_
  mac80211.c | 7 +++++--
  1 file changed, 5 insertions(+), 2 deletions(-)
 
-diff --git a/mac80211.c b/mac80211.c
-index b603d40c..8e8494e9 100644
---- a/mac80211.c
-+++ b/mac80211.c
-@@ -1614,7 +1614,10 @@ EXPORT_SYMBOL_GPL(mt76_get_sar_power);
+Index: mt76-2025.09.15~6467af3b/mac80211.c
+===================================================================
+--- mt76-2025.09.15~6467af3b.orig/mac80211.c
++++ mt76-2025.09.15~6467af3b/mac80211.c
+@@ -1824,7 +1824,10 @@ EXPORT_SYMBOL_GPL(mt76_get_sar_power);
  static void
  __mt76_csa_finish(void *priv, u8 *mac, struct ieee80211_vif *vif)
  {
--	if (vif->bss_conf.csa_active && ieee80211_beacon_cntdwn_is_complete(vif))
+-	if (vif->bss_conf.csa_active && ieee80211_beacon_cntdwn_is_complete(vif, 0))
 +	if (!vif->bss_conf.csa_active || vif->type == NL80211_IFTYPE_STATION)
 +		return;
 +
-+	if (ieee80211_beacon_cntdwn_is_complete(vif))
- 		ieee80211_csa_finish(vif);
++	if (ieee80211_beacon_cntdwn_is_complete(vif, 0))
+ 		ieee80211_csa_finish(vif, 0);
  }
  
-@@ -1636,7 +1639,7 @@ __mt76_csa_check(void *priv, u8 *mac, struct ieee80211_vif *vif)
+@@ -1846,7 +1849,7 @@ __mt76_csa_check(void *priv, u8 *mac, st
  {
  	struct mt76_dev *dev = priv;
  
@@ -50,7 +50,4 @@ index b603d40c..8e8494e9 100644
 +	if (!vif->bss_conf.csa_active || vif->type == NL80211_IFTYPE_STATION)
  		return;
  
- 	dev->csa_complete |= ieee80211_beacon_cntdwn_is_complete(vif);
--- 
-2.51.0
-
+ 	dev->csa_complete |= ieee80211_beacon_cntdwn_is_complete(vif, 0);

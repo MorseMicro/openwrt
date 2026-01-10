@@ -69,12 +69,14 @@ define KernelPackage/mmc-mt7620
   KCONFIG:= \
 	CONFIG_MMC_MTK \
 	CONFIG_MMC_CQHCI \
+	CONFIG_MMC_HSQ \
 	CONFIG_PWRSEQ_EMMC \
 	CONFIG_PWRSEQ_SIMPLE
   FILES:= \
 	$(LINUX_DIR)/drivers/mmc/host/mtk-sd.ko \
+	$(LINUX_DIR)/drivers/mmc/host/mmc_hsq.ko \
 	$(LINUX_DIR)/drivers/mmc/host/cqhci.ko
-  AUTOLOAD:=$(call AutoLoad,99,cqhci mtk-sd)
+  AUTOLOAD:=$(call AutoLoad,99,cqhci mmc_hsq mtk-sd)
 endef
 
 define KernelPackage/mmc-mt7620/description

@@ -11,18 +11,19 @@ Index: linux-6.6.110/arch/arm/boot/dts/broadcom/bcm2711-rpi-4-b.dts
 ===================================================================
 --- linux-6.6.110.orig/arch/arm/boot/dts/broadcom/bcm2711-rpi-4-b.dts
 +++ linux-6.6.110/arch/arm/boot/dts/broadcom/bcm2711-rpi-4-b.dts
-@@ -81,11 +81,11 @@
- 	gpio-line-names = "ID_SDA",		/*  0 */
+@@ -315,11 +315,11 @@
+ &gpio {
+ 	gpio-line-names = "ID_SDA",
  			  "ID_SCL",
  			  "GPIO2",
 -			  "GPIO3",
 +			  "MM_WAKE",
  			  "GPIO4",
--			  "GPIO5",		/*  5 */
-+			  "MM_RESET",		/*  5 */
+-			  "GPIO5",
++			  "MM_RESET",
  			  "GPIO6",
 -			  "GPIO7",
 +			  "MM_BUSY",
  			  "GPIO8",
  			  "GPIO9",
- 			  "GPIO10",		/* 10 */
+ 			  "GPIO10",

@@ -1322,6 +1322,10 @@ wpa_supplicant_prepare_interface() {
 	[ -n "$country" ] && {
 		country_str="country=$country"
 	}
+	local sae_pwe_str=
+	if [ "$band" = "s1g" ]; then
+		sae_pwe_str="sae_pwe=1"
+	fi
 
 	multiap_flag_file="${_config}.is_multiap"
 	if [ "$multi_ap" = "1" ]; then
@@ -1334,6 +1338,7 @@ wpa_supplicant_prepare_interface() {
 ${scan_list:+freq_list=$scan_list}
 $ap_scan
 $country_str
+$sae_pwe_str
 EOF
 	return 0
 }

@@ -1,0 +1,130 @@
+--- a/mac.c
++++ b/mac.c
+@@ -1808,8 +1808,7 @@ mm81x_mac_ops_unassign_vif_chanctx(struc
+ 	MM_UNUSED(ctx);
+ }
+ 
+-static int mm81x_mac_ops_config(struct ieee80211_hw *hw, int radio_idx,
+-				u32 changed)
++static int mm81x_mac_ops_config(struct ieee80211_hw *hw, u32 changed)
+ {
+ 	int err = 0;
+ 	struct mm81x *mm = hw->priv;
+@@ -1837,7 +1836,7 @@ exit:
+ 
+ static int mm81x_mac_ops_get_txpower(struct ieee80211_hw *hw,
+ 				     struct ieee80211_vif *vif,
+-				     unsigned int link_id, int *dbm)
++				     int *dbm)
+ {
+ 	struct mm81x *mm = hw->priv;
+ 	struct ieee80211_chanctx_conf *chanctx_conf;
+@@ -2208,8 +2207,7 @@ exit:
+ 	return ret;
+ }
+ 
+-static int mm81x_mac_set_frag_threshold(struct ieee80211_hw *hw, int radio_idx,
+-					u32 value)
++static int mm81x_mac_set_frag_threshold(struct ieee80211_hw *hw, u32 value)
+ {
+ 	int ret = -EINVAL;
+ 	struct mm81x *mm = hw->priv;
+@@ -2381,8 +2379,7 @@ exit:
+ 		dev_kfree_skb_any(skb);
+ }
+ 
+-static int mm81x_mac_set_rts_threshold(struct ieee80211_hw *hw, int radio_idx,
+-				       u32 value)
++static int mm81x_mac_set_rts_threshold(struct ieee80211_hw *hw, u32 value)
+ {
+ 	struct mm81x *mm = hw->priv;
+ 
+@@ -2392,11 +2389,10 @@ static int mm81x_mac_set_rts_threshold(s
+ 
+ static void mm81x_mac_ops_sta_rc_update(struct ieee80211_hw *hw,
+ 					struct ieee80211_vif *vif,
+-					struct ieee80211_link_sta *link_sta,
++					struct ieee80211_sta *sta,
+ 					u32 changed)
+ {
+ 	struct mm81x *mm = hw->priv;
+-	struct ieee80211_sta *sta = link_sta->sta;
+ 	enum ieee80211_sta_state old_state;
+ 	enum ieee80211_sta_state new_state;
+ 
+@@ -2511,7 +2507,7 @@ static const struct ieee80211_ops mm_ops
+ 	.sta_state = mm81x_mac_ops_sta_state,
+ 	.set_frag_threshold = mm81x_mac_set_frag_threshold,
+ 	.set_rts_threshold = mm81x_mac_set_rts_threshold,
+-	.link_sta_rc_update = mm81x_mac_ops_sta_rc_update,
++	.sta_rc_update = mm81x_mac_ops_sta_rc_update,
+ 	.sta_statistics = mm81x_mac_ops_sta_statistics,
+ 	.get_expected_throughput = mm81x_get_expected_throughput,
+ 	.hw_scan = mm81x_mac_ops_hw_scan,
+@@ -2705,7 +2701,7 @@ static void mm81x_mac_config_hw(struct m
+ 
+ static void mm81x_stale_tx_status_timer(struct timer_list *t)
+ {
+-	struct mm81x *mm = timer_container_of(mm, t, stale_status.timer);
++	struct mm81x *mm = from_timer(mm, t, stale_status.timer);
+ 
+ 	spin_lock_bh(&mm->stale_status.lock);
+ 	if (mm81x_hif_get_tx_status_pending_count(mm))
+@@ -2715,7 +2711,7 @@ static void mm81x_stale_tx_status_timer(
+ 
+ static void mm81x_stale_tx_status_timer_finish(struct mm81x *mm)
+ {
+-	timer_delete_sync_try(&mm->stale_status.timer);
++	try_to_del_timer_sync(&mm->stale_status.timer);
+ }
+ 
+ static void mm81x_mac_stale_tx_status_timer_init(struct mm81x *mm)
+--- a/rc.c
++++ b/rc.c
+@@ -48,7 +48,7 @@ static void mm81x_rc_work(struct work_st
+ 
+ static void mm81x_rc_timer(struct timer_list *t)
+ {
+-	struct mm81x_rc *mrc = timer_container_of(mrc, t, timer);
++	struct mm81x_rc *mrc = from_timer(mrc, t, timer);
+ 	struct mm81x *mm = mrc->mm;
+ 
+ 	queue_work(mm->net_wq, &mm->mrc.work);
+@@ -70,7 +70,7 @@ int mm81x_rc_init(struct mm81x *mm)
+ int mm81x_rc_deinit(struct mm81x *mm)
+ {
+ 	cancel_work_sync(&mm->mrc.work);
+-	timer_delete_sync_try(&mm->mrc.timer);
++	try_to_del_timer_sync(&mm->mrc.timer);
+ 
+ 	return 0;
+ }
+--- a/yaps.c
++++ b/yaps.c
+@@ -82,7 +82,7 @@ static int mm81x_yaps_irq_handler(struct
+ 		set_bit(MM81X_RX_PEND, &mm->hif.event_flags);
+ 
+ 	if (status & BIT(MM81X_INT_YAPS_FC_PACKET_FREED_UP_IRQN)) {
+-		timer_delete_sync_try(&mm->hif.u.yaps.chip_queue_full.timer);
++		try_to_del_timer_sync(&mm->hif.u.yaps.chip_queue_full.timer);
+ 		set_bit(MM81X_TX_PACKET_FREED_UP_PEND, &mm->hif.event_flags);
+ 	}
+ 
+@@ -564,7 +564,7 @@ int mm81x_yaps_get_tx_buffered_count(str
+ static void mm81x_yaps_tx_q_full_timer(struct timer_list *t)
+ {
+ 	struct mm81x_yaps *yaps =
+-		timer_container_of(yaps, t, chip_queue_full.timer);
++		from_timer(yaps, t, chip_queue_full.timer);
+ 
+ 	queue_work(yaps->mm->chip_wq, &yaps->mm->hif_work);
+ }
+@@ -577,7 +577,7 @@ static void mm81x_yaps_q_chip_full_timer
+ 
+ static void mm81x_yaps_q_chip_full_timer_finish(struct mm81x_yaps *yaps)
+ {
+-	timer_delete_sync_try(&yaps->chip_queue_full.timer);
++	try_to_del_timer_sync(&yaps->chip_queue_full.timer);
+ }
+ 
+ int mm81x_yaps_init(struct mm81x *mm)

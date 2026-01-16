@@ -550,6 +550,11 @@ mac80211_hostapd_setup_base() {
 			s1g_oper_centr_freq_idx=
 		fi
 
+		# 2MHz operating channel index used to calculate s1g_pri_loc
+		s1g_2MHz_oper_centr_freq_idx=$(( 2 + 4*((channel - 1)/ (4)) ))
+		s1g_pri_loc=$(( channel > s1g_2MHz_oper_centr_freq_idx ))
+		append base_cfg "s1g_pri_loc=$s1g_pri_loc" "$N"
+
 		[ -n "$s1g_oper_centr_freq_idx" ] && [ "$s1g_oper_centr_freq_idx" -le 51 ] && append base_cfg "s1g_oper_centr_freq_idx=$s1g_oper_centr_freq_idx" "$N"
 		[ -n "$op_class" ] && append base_cfg "op_class=$op_class" "$N"
 	}

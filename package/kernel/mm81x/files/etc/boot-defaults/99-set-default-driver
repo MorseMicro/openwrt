@@ -1,0 +1,19 @@
+#!/bin/sh
+
+MODCONF="/etc/modules.conf"
+
+has_morse_module() {
+	[ -f /etc/modules.d/morse ] && return 0
+	for mod in /lib/modules/*/morse.ko; do
+		[ -e "$mod" ] && return 0
+	done
+	return 1
+}
+
+# Default to morse when the module is present in the image
+if has_morse_module; then
+	[ -f "$MODCONF" ] || touch "$MODCONF"
+	sed -i '/^blacklist morse$/d;/^blacklist mm81x$/d' "$MODCONF"
+	echo "blacklist mm81x" >> "$MODCONF"
+fi
+exit 0

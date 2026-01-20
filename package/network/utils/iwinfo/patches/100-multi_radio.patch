@@ -98,7 +98,7 @@ Index: libiwinfo-2025.11.25~d625cc77/iwinfo_nl80211.c
 +	if (data.radio_idx >= 0)
 +		snprintf(buf, sizeof(buf), "/var/run/hostapd-%s.%d.conf", phy, data.radio_idx);
 +	else
-+		snprintf(buf, sizeof(buf), "/var/run/hostapd-%s.conf", phy);
++		snprintf(buf, sizeof(buf), "/var/run/hostapd-%s-%s.conf", phy, ifname);
 +
  	fp = fopen(buf, "r");
  

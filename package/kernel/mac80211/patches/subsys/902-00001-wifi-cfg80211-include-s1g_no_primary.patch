@@ -13,11 +13,11 @@ Signed-off-by: Lachlan Hodges <lachlan.hodges@morsemicro.com>
  net/wireless/nl80211.c       | 3 +++
  2 files changed, 7 insertions(+)
 
-diff --git a/include/uapi/linux/nl80211.h b/include/uapi/linux/nl80211.h
-index 8134f10e4e6c..964e1c779cdd 100644
---- a/include/uapi/linux/nl80211.h
-+++ b/include/uapi/linux/nl80211.h
-@@ -4444,6 +4444,9 @@ enum nl80211_wmm_rule {
+Index: backports-6.12.61/include/uapi/linux/nl80211.h
+===================================================================
+--- backports-6.12.61.orig/include/uapi/linux/nl80211.h
++++ backports-6.12.61/include/uapi/linux/nl80211.h
+@@ -4344,6 +4344,9 @@ enum nl80211_wmm_rule {
   *	channel in current regulatory domain.
   * @NL80211_FREQUENCY_ATTR_NO_16MHZ: 16 MHz operation is not allowed on this
   *	channel in current regulatory domain.
@@ -27,7 +27,7 @@ index 8134f10e4e6c..964e1c779cdd 100644
   * @NL80211_FREQUENCY_ATTR_MAX: highest frequency attribute number
   *	currently defined
   * @__NL80211_FREQUENCY_ATTR_AFTER_LAST: internal use
-@@ -4492,6 +4495,7 @@ enum nl80211_frequency_attr {
+@@ -4392,6 +4395,7 @@ enum nl80211_frequency_attr {
  	NL80211_FREQUENCY_ATTR_NO_4MHZ,
  	NL80211_FREQUENCY_ATTR_NO_8MHZ,
  	NL80211_FREQUENCY_ATTR_NO_16MHZ,
@@ -35,11 +35,11 @@ index 8134f10e4e6c..964e1c779cdd 100644
  
  	/* keep last */
  	__NL80211_FREQUENCY_ATTR_AFTER_LAST,
-diff --git a/net/wireless/nl80211.c b/net/wireless/nl80211.c
-index c961cd42a832..225580507a4b 100644
---- a/net/wireless/nl80211.c
-+++ b/net/wireless/nl80211.c
-@@ -1314,6 +1314,9 @@ static int nl80211_msg_put_channel(struct sk_buff *msg, struct wiphy *wiphy,
+Index: backports-6.12.61/net/wireless/nl80211.c
+===================================================================
+--- backports-6.12.61.orig/net/wireless/nl80211.c
++++ backports-6.12.61/net/wireless/nl80211.c
+@@ -1245,6 +1245,9 @@ static int nl80211_msg_put_channel(struc
  		if ((chan->flags & IEEE80211_CHAN_NO_16MHZ) &&
  		    nla_put_flag(msg, NL80211_FREQUENCY_ATTR_NO_16MHZ))
  			goto nla_put_failure;
@@ -49,5 +49,3 @@ index c961cd42a832..225580507a4b 100644
  	}
  
  	if (nla_put_u32(msg, NL80211_FREQUENCY_ATTR_MAX_TX_POWER,
--- 
-2.43.0

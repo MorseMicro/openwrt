@@ -60,6 +60,9 @@ define KernelPackage/mm81x/install
 	$(INSTALL_DIR) $(1)/lib/firmware/morsemicro
 	$(INSTALL_BIN) ./files/lib/firmware/morsemicro/* $(1)/lib/firmware/morsemicro/
 
+	$(INSTALL_DIR) $(1)/usr/libexec/rpcd
+	$(INSTALL_BIN) ./files/usr/libexec/rpcd/switch_wifi_driver $(1)/usr/libexec/rpcd/
+
 	ln -sf bcf_mf15457.bin \
 		$(1)/lib/firmware/morsemicro/bcf_boardtype_0804.bin
 

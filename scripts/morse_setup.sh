@@ -114,6 +114,7 @@ download_toolchain(){
     toolchain_archive="openwrt-toolchain-${vers}-${target}-${subtarget}_gcc-${gcc_vers}_${libc}${libc_suffix}.Linux-x86_64"
 
     if [ -n "${INSTALL_PATH}" ]; then
+        [ ! -d "${INSTALL_PATH}" ] && mkdir -p "${INSTALL_PATH}"
         TAR_STRIP="--strip-components=2"
         SUB_FOLDER="${toolchain_archive}/toolchain-${arch}${arch_suffix}_gcc-${gcc_vers}_${libc}${libc_suffix}"
         TOOLCHAIN_PATH=${INSTALL_PATH}
@@ -123,12 +124,6 @@ download_toolchain(){
         SUB_FOLDER=""
         TAR_STRIP=""
     fi
-
-    SUDO=''
-    if [ ! -w "${INSTALL_PATH}" ]; then
-        SUDO="sudo"
-    fi
-    [ ! -d "${INSTALL_PATH}" ] && $SUDO mkdir -p "${INSTALL_PATH}"
 
     echo "Toolchain will be installed into ${TOOLCHAIN_PATH}"
 

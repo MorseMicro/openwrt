@@ -194,6 +194,9 @@
 };
 
 &sdhci {
+	/* only let the upstream MTK MMC host driver bind (exclude the vendor version) */
+	compatible = "mediatek,mt7620-mmc";
+
 	status = "okay";
 
 	cap-sd-highspeed;

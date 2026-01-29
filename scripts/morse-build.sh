@@ -38,8 +38,8 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
-if ! [ -f Makefile -a -f feeds.conf ]; then
-	die "Run from the OpenWrt top directory (with Makefile and scripts/feeds)."
+if ! [ -f Makefile -a -f feeds.conf.default ]; then
+	die "Run from the OpenWrt top directory (with Makefile and feeds config)."
 fi
 
 if ! [ -f .config ]; then

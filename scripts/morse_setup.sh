@@ -5,6 +5,8 @@
 
 set -ue -o pipefail
 
+DEFAULT_CACHE_LOC=/opt/openwrt
+
 error_handler() {
     2>&1 echo "SETUP FAILED: error $? on line ${BASH_LINENO[0]} from: ${BASH_COMMAND}"
 }
@@ -18,9 +20,12 @@ This MorseMicro script provides help automating the initialization of OpenWRT bu
 Make sure you run this script from the top directory of OpenWRT!
 
 NB If you want to put toolchains/downloads in a common location so they can
-be shared between checkouts of the repository, do:
+be shared between checkouts of the repository and enable ccache, do:
 
-    sudo mkdir -p /opt/openwrt && sudo chown -R "$(id -u):$(id -g)"
+    sudo mkdir -p $DEFAULT_CACHE_LOC && sudo chown -R "$(id -u):$(id -g)" $DEFAULT_CACHE_LOC
+
+You can then automatically download and use toolchains in this location
+by using the -E option.
 
 Usage:
     ${0} <options>
@@ -53,7 +58,7 @@ Usage:
 
             -E                      automatically download and use a toolchain from VERSION_REPO;
                                     if the toolchain already exists at the specified location, it won't
-                                    be redownloaded. By default, it will look in /opt/openwrt
+                                    be redownloaded. By default, it will look in $DEFAULT_CACHE_LOC
                                     (+ correct architecture), unless -e specifies a different path.
                                     If you wish to use an already downloaded toolchain with a later
                                     run of morse_setup.sh, you should specify -E again.
@@ -114,7 +119,7 @@ download_toolchain(){
         SUB_FOLDER="${toolchain_archive}/toolchain-${arch}${arch_suffix}_gcc-${gcc_vers}_${libc}${libc_suffix}"
         TOOLCHAIN_PATH=${INSTALL_PATH}
     else
-        INSTALL_PATH="/opt/openwrt"
+        INSTALL_PATH=$DEFAULT_CACHE_LOC
         TOOLCHAIN_PATH="${INSTALL_PATH}/${toolchain_archive}/toolchain-${arch}${arch_suffix}_gcc-${gcc_vers}_${libc}${libc_suffix}"
         SUB_FOLDER=""
         TAR_STRIP=""
@@ -123,24 +128,15 @@ download_toolchain(){
     echo "Toolchain will be installed into ${TOOLCHAIN_PATH}"
 
     if [ ! -d "${TOOLCHAIN_PATH}/bin" ]; then
-        SUDO=''
-        if [ ! -w "${INSTALL_PATH}" ]; then
-            SUDO="sudo"
-        fi
-
         if [ ! -f "tmp/dl/${toolchain_archive}.tar.zst" ]; then
             wget -P tmp/dl "${base_url}/targets/${target}/${subtarget}/${toolchain_archive}.tar.zst"
         fi
 
-        $SUDO tar -xf "tmp/dl/${toolchain_archive}.tar.zst" -C ${INSTALL_PATH} ${SUB_FOLDER} ${TAR_STRIP}
-
-        if [ -n "$SUDO" ]; then
-                $SUDO chown -R "$USER:$(id -g)" "${TOOLCHAIN_PATH}"
-        fi
+        tar -xf "tmp/dl/${toolchain_archive}.tar.zst" -C ${INSTALL_PATH} ${SUB_FOLDER} ${TAR_STRIP}
 
         echo "${toolchain_archive}.tar.zst extracted to ${TOOLCHAIN_PATH}"
     else
-        echo "${TOOLCHAIN_PATH} already contains a toolchain!"
+        echo "Using existing toolchain in ${TOOLCHAIN_PATH}"
     fi
 }
 
@@ -179,8 +175,11 @@ MINIMAL=
 INITIALIZE=
 EXTRAS=
 EXT_TOOLCHAIN=
+DOWNLOAD_TOOLCHAIN=
+TOOLCHAIN_PATH=
 GIT_SRC_OVERRIDES=( )
 MODE=""
+
 while getopts ":l:s:b:x:g:ie:Emha" OPT; do
     case "${OPT}" in
         a)
@@ -233,6 +232,22 @@ if [ -z "$MODE" ] && [ -z "$INITIALIZE" ]; then
     usage 1
 fi
 
+if [ "$DOWNLOAD_TOOLCHAIN" = 1 ]; then
+    CHECK_PATH=$DEFAULT_CACHE_LOC
+    if [ -n "$TOOLCHAIN_PATH" ]; then
+        CHECK_PATH=$TOOLCHAIN_PATH
+    fi
+    if [ ! -w "$CHECK_PATH" ]; then
+        echo "Aborting as ${CHECK_PATH} isn't writable for toolchain download. Make sure the directory exists and is writable:"
+        echo "    sudo mkdir -p $CHECK_PATH && sudo chown -R $(id -u):$(id -g) $CHECK_PATH"
+        exit 1
+    fi
+fi
+
+if [ ! -w "${DEFAULT_CACHE_LOC}" ]; then
+    echo "WARNING: ${DEFAULT_CACHE_LOC} isn't writable; will not store ccache or downloads outside this repository."
+fi
+
 if [ "${INITIALIZE}" ]; then
     ./scripts/feeds update -a
     #patch packages if necessary and re-create index files
@@ -283,9 +298,9 @@ case "${MODE}" in
         done
 
         (
-            if [ -w /opt/openwrt ]; then
-                echo 'CONFIG_DOWNLOAD_FOLDER="/opt/openwrt/dl"'
-                echo 'CONFIG_CCACHE_DIR="/opt/openwrt/ccache"'
+            if [ -w "$DEFAULT_CACHE_LOC" ]; then
+                echo "CONFIG_DOWNLOAD_FOLDER=\"$DEFAULT_CACHE_LOC/dl\""
+                echo "CONFIG_CCACHE_DIR=\"$DEFAULT_CACHE_LOC/ccache\""
             fi
 
             for f in ./boards/common/*_diffconfig; do

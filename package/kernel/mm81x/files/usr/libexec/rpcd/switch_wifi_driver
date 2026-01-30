@@ -209,7 +209,7 @@ perform_switch_async() {
     # APP-6166: checking PHY presence and whether network.status pending: true didn't work = sleep
     sleep 10
     logger -t "$LOGTAG" "Reloading wifi to update device name"
-    /sbin/wifi reload >/dev/null 2>&1 || logger -t "$LOGTAG" "Wifi reload failed"
+    /sbin/wifi up >/dev/null 2>&1 || logger -t "$LOGTAG" "Wi-Fi up failed"
 }
 
 switch_driver() {

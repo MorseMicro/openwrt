@@ -1,0 +1,11 @@
+--- a/yaps-hw.c
++++ b/yaps-hw.c
+@@ -92,7 +92,7 @@
+ 		u32 lock;
+ 	};
+ 	/* scratch 2/3 un-used for ECA and 1/2/3 un-used for ECB */
+-} __packed;
++} __packed __aligned(8);
+
+ struct mm81x_yaps_hw_aux_data {
+ 	unsigned long access_lock;

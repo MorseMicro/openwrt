@@ -228,7 +228,7 @@
 	clock-names = "source", "hclk";
 
 	mm8108_sdio: mm8108_sdio@0 {
-		compatible = "morse,mm610x";
+		compatible = "morse,mm610x", "morsemicro,mm81x";
 		reset-gpios = <&gpio 6 0>;
 		power-gpios = <&gpio 7 0>,
 		              <&gpio 8 0>;

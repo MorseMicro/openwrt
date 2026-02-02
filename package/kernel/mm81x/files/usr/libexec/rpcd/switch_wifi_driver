@@ -10,6 +10,7 @@ IW_DEV_FILE="/usr/share/libiwinfo/devices.txt"
 MODCONF="/etc/modules.conf"
 LOGTAG="switch_wifi_driver"
 
+. /lib/functions.sh
 . /usr/share/libubox/jshn.sh
 json_init
 
@@ -80,12 +81,13 @@ modules_for_driver_removal() {
 }
 
 load_modules() {
-    set -- $(modules_for_driver "$1")
+    local driver="$1"
+    set -- $(modules_for_driver "$driver")
     for mod in "$@"; do
-        if modprobe "$mod"; then
+        if /sbin/kmodloader "/etc/modules.d/$mod"; then
             logger -t "$LOGTAG" "Loaded $mod"
         else
-            logger -t "$LOGTAG" "Failed to load $mod (driver=$1)"
+            logger -t "$LOGTAG" "Failed to load $mod (driver=$driver)"
             return 1
         fi
     done
@@ -102,45 +104,50 @@ remove_modules() {
     done
 }
 
-delete_s1g_ifaces() {
-    iface=$2 s1g_devices=$3
-    json_select "$iface"
-    json_get_var device device
+# Return a space separated list of s1g wifi-device names
+get_s1g_devices() {
+    s1g_devices=" "
+    config_load wireless
+
+    _get_s1g_device() {
+        local device="$1"
+        local band
+
+        config_get band "$device" band
+        [ "$band" = "s1g" ] && s1g_devices="$s1g_devices$device "
+    }
+
+    config_foreach _get_s1g_device wifi-device
+    echo "$s1g_devices"
+}
+
+delete_s1g_iface() {
+    iface="$1"
+    s1g_devices="$2"
+
+    config_get device "$iface" device
     case "$s1g_devices" in
         *" $device "*)
-            ubus call uci delete "{\"config\":\"wireless\",\"section\":\"$iface\"}"
+            uci -q delete "wireless.$iface"
             logger -t "$LOGTAG" "Deleted s1g wifi-iface: $iface"
         ;;
     esac
-    json_select ..
 }
 
 delete_s1g_configs() {
-    # Find the names of s1g wifi-devices
-    json_load "$(ubus call uci get '{"config":"wireless", "type":"wifi-device"}')"
-    s1g_devices=" "
-    json_select values
-    json_get_keys devices
-    for device in $devices; do
-        json_select "$device"
-        json_get_var band band
-        [ "$band" = "s1g" ] && s1g_devices="$s1g_devices$device "
-        json_select ..
-    done
-
+    s1g_devices="$(get_s1g_devices)"
     [ "$s1g_devices" = " " ] && { logger -t "$LOGTAG" "No existing s1g wifi-device found"; return 0; }
 
     # Delete the wifi-ifaces associated with s1g wifi-devices
-    json_load "$(ubus call uci get '{"config":"wireless", "type":"wifi-iface"}')"
-    json_for_each_item "delete_s1g_ifaces" "values" "$s1g_devices"
+    config_load wireless
+    config_foreach delete_s1g_iface wifi-iface "$s1g_devices"
 
     # Delete the radios
     for s1g_device in $s1g_devices; do
-        ubus call uci delete "{\"config\":\"wireless\",\"section\":\"$s1g_device\"}"
+        uci -q delete "wireless.$s1g_device"
         logger -t "$LOGTAG" "Deleted s1g wifi-device: $s1g_device"
     done
-
-    ubus call uci commit '{"config":"wireless"}'
+    uci commit wireless
 }
 
 update_blacklist() {
@@ -152,6 +159,20 @@ update_blacklist() {
         echo "blacklist $mod" >> "$MODCONF"
         logger -t "$LOGTAG" "Blacklisted $mod"
     done
+}
+
+# Adapted from morse-wireless-defaults
+wait_for_s1g_device() {
+    local s1g_devices
+    local attempt
+
+    for attempt in $(seq 10); do
+        s1g_devices=$(get_s1g_devices)
+        [ "$s1g_devices" != " " ] && return
+        logger -t "$LOGTAG" "Waiting for S1G device to appear (attempt $attempt)..."
+        sleep 1
+    done
+    logger -t "$LOGTAG" "Timeout waiting for S1G device"
 }
 
 patch_iwinfo_device_names() {
@@ -190,8 +211,15 @@ perform_switch_async() {
         bus="$(get_valid_bus_from_driver_full "$driver_full")"
     fi
 
-    wifi down >/dev/null 2>&1
-    logger -t "$LOGTAG" "Bring Wi-Fi down"
+    s1g_devices="$(get_s1g_devices)"
+    s1g_country=""
+    for s1g_device in $s1g_devices; do
+        logger -t "$LOGTAG" "Bringing down S1G device: $s1g_device"
+        /sbin/wifi down "$s1g_device" 2>/dev/null
+
+        # There should only ever be one S1G device, but just retain the last country found
+        s1g_country="$(uci -q get wireless."$s1g_device".country)"
+    done
 
     update_blacklist "$other"
     remove_modules "$other"
@@ -200,16 +228,32 @@ perform_switch_async() {
     [ "$bus" != "usb" ] && /morse/scripts/chipreset.sh > /dev/kmsg 2>&1
 
     if ! load_modules "$driver"; then
-        logger -t "$LOGTAG" "Driver switch aborted: module load failed; Wi-Fi will remain down"
+        logger -t "$LOGTAG" "Driver switch aborted: module load failed"
         return
     fi
 
+    wait_for_s1g_device
+
+    # Retain the country code for S1G devices
+    new_s1g_devices="$(get_s1g_devices)"
+    if [ -n "$s1g_country" ]; then
+        for new_s1g_device in $new_s1g_devices; do
+            logger -t "$LOGTAG" "Retaining country $s1g_country for $new_s1g_device (may be rejected by morse-wireless-defaults)"
+            uci set "wireless.${new_s1g_device}.country=${s1g_country}"
+        done
+    fi
+
+    # Enable devices and reconfigure with custom defaults
+    /morse/scripts/morse-wireless-defaults > /dev/null 2>&1
+
     patch_iwinfo_device_names "$driver"
 
-    # APP-6166: checking PHY presence and whether network.status pending: true didn't work = sleep
-    sleep 10
-    logger -t "$LOGTAG" "Reloading wifi to update device name"
-    /sbin/wifi up >/dev/null 2>&1 || logger -t "$LOGTAG" "Wi-Fi up failed"
+    uci commit wireless
+
+    for new_s1g_device in $new_s1g_devices; do
+        logger -t "$LOGTAG" "Bringing up S1G device: $new_s1g_device"
+        /sbin/wifi up "$new_s1g_device" 2>/dev/null
+    done
 }
 
 switch_driver() {

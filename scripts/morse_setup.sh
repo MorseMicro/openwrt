@@ -254,11 +254,6 @@ if [ "${INITIALIZE}" ]; then
     patch_feeds_packages
     ./scripts/feeds update -i
     ./scripts/feeds install -a
-
-    # For ALL_KMODS to build, we need to remove xtables-addons as it fails to
-    # compile when using an external toolchain due to a bug in 998b6d4.
-    # The bug is fixed in the upstream 3856074, but not pulled into 23.
-    ./scripts/feeds uninstall xtables-addons
 fi
 
 case "${MODE}" in

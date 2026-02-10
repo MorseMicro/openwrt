@@ -1,17 +1,17 @@
 --- a/mac.c
 +++ b/mac.c
-@@ -1808,8 +1808,7 @@ mm81x_mac_ops_unassign_vif_chanctx(struc
+@@ -1636,8 +1636,7 @@ mm81x_mac_ops_unassign_vif_chanctx(struc
  	MM_UNUSED(ctx);
  }
- 
+
 -static int mm81x_mac_ops_config(struct ieee80211_hw *hw, int radio_idx,
 -				u32 changed)
 +static int mm81x_mac_ops_config(struct ieee80211_hw *hw, u32 changed)
  {
- 	int err = 0;
  	struct mm81x *mm = hw->priv;
-@@ -1837,7 +1836,7 @@ exit:
- 
+ 	struct ieee80211_conf *conf = &hw->conf;
+@@ -1663,7 +1662,7 @@ static int mm81x_mac_ops_config(struct i
+
  static int mm81x_mac_ops_get_txpower(struct ieee80211_hw *hw,
  				     struct ieee80211_vif *vif,
 -				     unsigned int link_id, int *dbm)
@@ -19,28 +19,55 @@
  {
  	struct mm81x *mm = hw->priv;
  	struct ieee80211_chanctx_conf *chanctx_conf;
-@@ -2208,8 +2207,7 @@ exit:
+@@ -2040,8 +2039,7 @@ exit:
  	return ret;
  }
- 
+
 -static int mm81x_mac_set_frag_threshold(struct ieee80211_hw *hw, int radio_idx,
 -					u32 value)
 +static int mm81x_mac_set_frag_threshold(struct ieee80211_hw *hw, u32 value)
  {
  	int ret = -EINVAL;
  	struct mm81x *mm = hw->priv;
-@@ -2381,8 +2379,7 @@ exit:
- 		dev_kfree_skb_any(skb);
+@@ -2092,8 +2090,6 @@ static struct ieee80211_vif *mm81x_rx_h_
+ 	struct ieee80211_vif *vif;
+ 	const struct ieee80211_hdr *hdr = (void *)skb->data;
+
+-	lockdep_assert_in_rcu_read_lock();
+-
+ 	for (vif_id = 0; vif_id < ARRAY_SIZE(mm->vifs); vif_id++) {
+ 		vif = mm81x_rcu_dereference_vif_id(mm, vif_id, true);
+ 		if (!vif)
+@@ -2133,8 +2129,6 @@ static void mm81x_rx_h_update_sta(struct
+ 	u8 *lookup = ieee80211_is_s1g_beacon(hdr->frame_control) ? hdr->addr1 :
+ 								   hdr->addr2;
+
+-	lockdep_assert_in_rcu_read_lock();
+-
+ 	sta = ieee80211_find_sta(vif, lookup);
+ 	if (!sta)
+ 		return;
+@@ -2155,8 +2149,6 @@ mm81x_rx_h_skb_get_vif(struct mm81x *mm,
+ 	u8 vif_id = u32_get_bits(le32_to_cpu(hdr_rx_status->flags),
+ 				 MM81X_RX_STATUS_FLAGS_VIF_ID);
+
+-	lockdep_assert_in_rcu_read_lock();
+-
+ 	/*
+ 	 * The firmware passes up broadcast mgmt frames such as beacons with a
+ 	 * NULL VIF. Assign the correct VIF. If no matching VIF was found, the
+@@ -2226,8 +2218,7 @@ static void mm81x_mac_ops_flush(struct i
+ 	}
  }
- 
--static int mm81x_mac_set_rts_threshold(struct ieee80211_hw *hw, int radio_idx,
--				       u32 value)
-+static int mm81x_mac_set_rts_threshold(struct ieee80211_hw *hw, u32 value)
+
+-static int mm81x_mac_ops_set_rts_threshold(struct ieee80211_hw *hw,
+-					   int radio_idx, u32 value)
++static int mm81x_mac_ops_set_rts_threshold(struct ieee80211_hw *hw, u32 value)
  {
  	struct mm81x *mm = hw->priv;
- 
-@@ -2392,11 +2389,10 @@ static int mm81x_mac_set_rts_threshold(s
- 
+
+@@ -2237,11 +2228,10 @@ static int mm81x_mac_ops_set_rts_thresho
+
  static void mm81x_mac_ops_sta_rc_update(struct ieee80211_hw *hw,
  					struct ieee80211_vif *vif,
 -					struct ieee80211_link_sta *link_sta,
@@ -51,44 +78,44 @@
 -	struct ieee80211_sta *sta = link_sta->sta;
  	enum ieee80211_sta_state old_state;
  	enum ieee80211_sta_state new_state;
- 
-@@ -2511,7 +2507,7 @@ static const struct ieee80211_ops mm_ops
- 	.sta_state = mm81x_mac_ops_sta_state,
+
+@@ -2510,7 +2500,7 @@ static const struct ieee80211_ops mm81x_
+ 	.flush = mm81x_mac_ops_flush,
  	.set_frag_threshold = mm81x_mac_set_frag_threshold,
- 	.set_rts_threshold = mm81x_mac_set_rts_threshold,
+ 	.set_rts_threshold = mm81x_mac_ops_set_rts_threshold,
 -	.link_sta_rc_update = mm81x_mac_ops_sta_rc_update,
 +	.sta_rc_update = mm81x_mac_ops_sta_rc_update,
  	.sta_statistics = mm81x_mac_ops_sta_statistics,
  	.get_expected_throughput = mm81x_get_expected_throughput,
  	.hw_scan = mm81x_mac_ops_hw_scan,
-@@ -2705,7 +2701,7 @@ static void mm81x_mac_config_hw(struct m
- 
+@@ -2636,7 +2626,7 @@ static void mm81x_mac_config_hw(struct m
+
  static void mm81x_stale_tx_status_timer(struct timer_list *t)
  {
 -	struct mm81x *mm = timer_container_of(mm, t, stale_status.timer);
 +	struct mm81x *mm = from_timer(mm, t, stale_status.timer);
- 
+
  	spin_lock_bh(&mm->stale_status.lock);
  	if (mm81x_hif_get_tx_status_pending_count(mm))
-@@ -2715,7 +2711,7 @@ static void mm81x_stale_tx_status_timer(
- 
+@@ -2646,7 +2636,7 @@ static void mm81x_stale_tx_status_timer(
+
  static void mm81x_stale_tx_status_timer_finish(struct mm81x *mm)
  {
 -	timer_delete_sync_try(&mm->stale_status.timer);
 +	try_to_del_timer_sync(&mm->stale_status.timer);
  }
- 
+
  static void mm81x_mac_stale_tx_status_timer_init(struct mm81x *mm)
 --- a/rc.c
 +++ b/rc.c
 @@ -48,7 +48,7 @@ static void mm81x_rc_work(struct work_st
- 
+
  static void mm81x_rc_timer(struct timer_list *t)
  {
 -	struct mm81x_rc *mrc = timer_container_of(mrc, t, timer);
 +	struct mm81x_rc *mrc = from_timer(mrc, t, timer);
  	struct mm81x *mm = mrc->mm;
- 
+
  	queue_work(mm->net_wq, &mm->mrc.work);
 @@ -70,7 +70,7 @@ int mm81x_rc_init(struct mm81x *mm)
  int mm81x_rc_deinit(struct mm81x *mm)
@@ -96,35 +123,35 @@
  	cancel_work_sync(&mm->mrc.work);
 -	timer_delete_sync_try(&mm->mrc.timer);
 +	try_to_del_timer_sync(&mm->mrc.timer);
- 
+
  	return 0;
  }
 --- a/yaps.c
 +++ b/yaps.c
 @@ -82,7 +82,7 @@ static int mm81x_yaps_irq_handler(struct
- 		set_bit(MM81X_RX_PEND, &mm->hif.event_flags);
- 
+ 		set_bit(MM81X_HIF_EVT_RX_PEND, &mm->hif.event_flags);
+
  	if (status & BIT(MM81X_INT_YAPS_FC_PACKET_FREED_UP_IRQN)) {
 -		timer_delete_sync_try(&mm->hif.u.yaps.chip_queue_full.timer);
 +		try_to_del_timer_sync(&mm->hif.u.yaps.chip_queue_full.timer);
- 		set_bit(MM81X_TX_PACKET_FREED_UP_PEND, &mm->hif.event_flags);
+ 		set_bit(MM81X_HIF_EVT_TX_PACKET_FREED_UP_PEND,
+ 			&mm->hif.event_flags);
  	}
- 
-@@ -564,7 +564,7 @@ int mm81x_yaps_get_tx_buffered_count(str
+@@ -562,7 +562,7 @@ int mm81x_yaps_get_tx_buffered_count(str
  static void mm81x_yaps_tx_q_full_timer(struct timer_list *t)
  {
  	struct mm81x_yaps *yaps =
 -		timer_container_of(yaps, t, chip_queue_full.timer);
 +		from_timer(yaps, t, chip_queue_full.timer);
- 
+
  	queue_work(yaps->mm->chip_wq, &yaps->mm->hif_work);
  }
-@@ -577,7 +577,7 @@ static void mm81x_yaps_q_chip_full_timer
- 
+@@ -575,7 +575,7 @@ static void mm81x_yaps_q_chip_full_timer
+
  static void mm81x_yaps_q_chip_full_timer_finish(struct mm81x_yaps *yaps)
  {
 -	timer_delete_sync_try(&yaps->chip_queue_full.timer);
 +	try_to_del_timer_sync(&yaps->chip_queue_full.timer);
  }
- 
+
  int mm81x_yaps_init(struct mm81x *mm)

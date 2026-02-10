@@ -10,13 +10,11 @@ Subject: [PATCH] mac: Add RI config support and enable NDP BA for hw
  morse_commands.h | 20 ++++++++++++++++++++
  4 files changed, 43 insertions(+)
 
-diff --git a/command.c b/command.c
-index bb1e7aa..6ed8fdb 100644
 --- a/command.c
 +++ b/command.c
-@@ -726,3 +726,18 @@ int mm81x_cmd_get_disabled_channels(
- 	return mm81x_cmd_tx(mm, (struct mm_cmd_resp *)resp, &req, resp_len, 0,
- 			    __func__);
+@@ -620,3 +620,17 @@ int mm81x_cmd_get_disabled_channels(
+
+ 	return mm81x_cmd_tx(mm, (struct mm_cmd_resp *)resp, &req, resp_len, 0);
  }
 +
 +int mm81x_cmd_config_ri(struct mm81x *mm, u16 vif_id, s8 ri)
@@ -30,28 +28,23 @@ index bb1e7aa..6ed8fdb 100644
 +			vif_id, sizeof(req));
 +
 +	return mm81x_cmd_tx(mm, (struct mm_cmd_resp *)&resp,
-+			   (struct mm_cmd_req *)&req, sizeof(resp), 0,
-+			    __func__);
++			   (struct mm_cmd_req *)&req, sizeof(resp), 0);
 +}
-diff --git a/command.h b/command.h
-index ef55857..f647aaa 100644
 --- a/command.h
 +++ b/command.h
-@@ -105,5 +105,6 @@ int mm81x_cmd_set_frag_threshold(struct mm81x *mm, u32 frag_threshold);
+@@ -102,5 +102,6 @@ int mm81x_cmd_set_frag_threshold(struct
  int mm81x_cmd_get_disabled_channels(
  	struct mm81x *mm, struct mm_cmd_resp_get_disabled_channels *resp,
  	uint resp_len);
 +int mm81x_cmd_config_ri(struct mm81x *mm, u16 vif_id, s8 ri);
- 
+
  #endif /* !_MM81X_COMMAND_H_ */
-diff --git a/mac.c b/mac.c
-index bdd7063..e8d507c 100644
 --- a/mac.c
 +++ b/mac.c
-@@ -1915,6 +1915,12 @@ static void mm81x_mac_ops_bss_info_changed(struct ieee80211_hw *hw,
+@@ -1741,6 +1741,12 @@ static void mm81x_mac_ops_bss_info_chang
  			mm81x_err(mm, "mm81x_cmd_cfg_bss failed %d", ret);
  	}
- 
+
 +	if (changed & BSS_CHANGED_S1G_RI) {
 +		ret = mm81x_cmd_config_ri(mm, mm_vif->id, info->s1g_ri);
 +		if (ret)
@@ -60,31 +53,30 @@ index bdd7063..e8d507c 100644
 +
  	mutex_unlock(&mm->lock);
  }
- 
-@@ -2680,6 +2686,7 @@ static void mm81x_mac_config_hw(struct mm81x *mm)
+
+@@ -2599,6 +2605,7 @@ static void mm81x_mac_config_hw(struct m
  	ieee80211_hw_set(hw, NEED_DTIM_BEFORE_ASSOC);
  	ieee80211_hw_set(hw, PS_NULLFUNC_STACK);
  	ieee80211_hw_set(hw, SUPPORTS_TX_FRAG);
 +	ieee80211_hw_set(hw, SUPPORTS_NDP_BLOCKACK);
- 
+
  	SET_IEEE80211_PERM_ADDR(hw, mm->macaddr);
- 
-diff --git a/morse_commands.h b/morse_commands.h
-index 29eb6d4..90d040c 100644
+
 --- a/morse_commands.h
 +++ b/morse_commands.h
-@@ -162,6 +162,7 @@ enum mm81x_cmd_id {
+@@ -163,6 +163,7 @@ enum mm81x_cmd_id {
  	MM_CMD_ID_EVT_BEACON_FILTER_MATCH = 0x4016,
- 
+
  	/* Test commands starting at 0x8000 */
 +	MM_CMD_ID_SET_RESPONSE_INDICATION = 0x8007,
  	MM_CMD_ID_SET_TRANSMISSION_RATE = 0x8009,
  	MM_CMD_ID_SET_CAPABILITIES = 0x8118,
- 
+
 @@ -2992,6 +2993,25 @@ struct mm_cmd_resp_set_capabilities {
+ 	struct mm_cmd_header hdr;
  	__le32 status;
  } __packed;
- 
++
 +/**
 + * struct mm_cmd_req_set_response_indication - request message for SET_RESPONSE_INDICATION
 + *
@@ -103,10 +95,6 @@ index 29eb6d4..90d040c 100644
 +	struct mm_cmd_header hdr;
 +	__le32 status;
 +} __packed;
-+
+
  /**
   * struct mm_cmd_req_set_transmission_rate - request message for SET_TRANSMISSION_RATE
-  */
--- 
-2.34.1
-

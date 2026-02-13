@@ -169,7 +169,7 @@ mikrotik,routerboard-m11g)
 	;;
 morse,halowlink1|\
 morse,halowlink2)
-	ucidef_set_led_netdev "halow" "rgb-halow" "rgb:led2" "wlan0" "link tx rx"
+	ucidef_set_led_netdev "halow" "rgb-halow" "rgb:led2" "wlh0" "link tx rx"
 	ucidef_set_led_netdev "80211n-ap" "rgb-80211n-ap" "rgb:led0" "phy0-ap0" "link tx rx"
 	;;
 mtc,wr1201)

@@ -1,0 +1,35 @@
+#!/bin/sh
+
+. /lib/functions.sh
+
+MORSE_HL_LED_NAME="rgb-halow"
+MORSE_EKH03_EKH04_LED_NAMES="red-wifi-activity blue-wifi-activity green-wifi-off"
+
+is_morse_led() {
+	local led_name="$1"
+	[ "$led_name" = "$MORSE_HL_LED_NAME" ] && return 0
+	for n in $MORSE_EKH03_EKH04_LED_NAMES; do
+		[ "$led_name" = "$n" ] && return 0
+	done
+	return 1
+}
+
+# Previously, we used `wlanX` as our default Morse interface name. This has been changed to `wlhX`.
+# Upon sysupgrade, update LED sections that reference `wlan0` to `wlh0`.
+migrate_led_configs() {
+	local section="$1"
+	local name dev new_dev
+
+	config_get name "$section" name
+	! is_morse_led "$name" && return 0
+
+	config_get dev "$section" dev
+	[ "$dev" != "wlan0" ] && return 0
+
+	new_dev="wlh${dev#wlan}"
+	uci set "system.$section.dev=$new_dev"
+}
+
+config_load system
+config_foreach migrate_led_configs led
+uci commit system

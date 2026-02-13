@@ -14,7 +14,7 @@ morse,mm8108-ekh01-spi)
 	# For our purposes, connecting it to HaLow activity is more useful.
 	# Note that wlan0 is usually the morse chip.
 	# The 'red' LED is controlled by a custom diag.sh (for bcm27xx).
-	ucidef_set_led_netdev "green" "green-wifi-activity" "led0" "wlan0" "link tx rx"
+	ucidef_set_led_netdev "green" "green-wifi-activity" "ACT" "wlh0" "link tx rx"
 	;;
 esac
 

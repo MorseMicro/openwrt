@@ -70,9 +70,9 @@ morse,ekh04v6)
 	# and turn purple once a link is established. To achieve this, we set
 	# 'link invert' on the green LED (i.e. turn on if wlan0 is off).
 	# Note that wlan0 is usually the morse chip.
-	ucidef_set_led_netdev "red" "red-wifi-activity" "red:led1" "wlan0" "link tx rx"
-	ucidef_set_led_netdev "blue" "blue-wifi-activity" "blue:led1" "wlan0" "link tx rx"
-	ucidef_set_led_netdev "green" "green-wifi-off" "green:led1" "wlan0" "link invert"
+	ucidef_set_led_netdev "red" "red-wifi-activity" "red:led1" "wlh0" "link tx rx"
+	ucidef_set_led_netdev "blue" "blue-wifi-activity" "blue:led1" "wlh0" "link tx rx"
+	ucidef_set_led_netdev "green" "green-wifi-off" "green:led1" "wlh0" "link invert"
 	;;
 oraybox,x1)
 	ucidef_set_led_netdev "wifi" "wifi" "blue:status" "wlan0"

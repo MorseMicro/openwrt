@@ -1,0 +1,166 @@
+--- a/drivers/net/wireless/morsemicro/mm81x/mac.c
++++ b/drivers/net/wireless/morsemicro/mm81x/mac.c
+@@ -828,7 +828,7 @@ __mm81x_hw_scan_h_init_params(struct mm8
+ 	struct mm81x_hw_scan_params *params = mm->hw_scan.params;
+ 
+ 	if (!params) {
+-		params = kzalloc_obj(*params, GFP_KERNEL);
++		params = kzalloc(sizeof(*params), GFP_KERNEL);
+ 		if (params)
+ 			mm->hw_scan.params = params;
+ 	} else {
+@@ -1553,8 +1553,7 @@ mm81x_mac_ops_unassign_vif_chanctx(struc
+ 	UNUSED(ctx);
+ }
+ 
+-static int mm81x_mac_ops_config(struct ieee80211_hw *hw, int radio_idx,
+-				u32 changed)
++static int mm81x_mac_ops_config(struct ieee80211_hw *hw, u32 changed)
+ {
+ 	struct mm81x *mm = hw->priv;
+ 	struct ieee80211_conf *conf = &hw->conf;
+@@ -1580,7 +1579,7 @@ static int mm81x_mac_ops_config(struct i
+ 
+ static int mm81x_mac_ops_get_txpower(struct ieee80211_hw *hw,
+ 				     struct ieee80211_vif *vif,
+-				     unsigned int link_id, int *dbm)
++				     int *dbm)
+ {
+ 	struct mm81x *mm = hw->priv;
+ 	struct ieee80211_chanctx_conf *chanctx_conf;
+@@ -1953,8 +1952,7 @@ exit:
+ 	return ret;
+ }
+ 
+-static int mm81x_mac_set_frag_threshold(struct ieee80211_hw *hw, int radio_idx,
+-					u32 value)
++static int mm81x_mac_set_frag_threshold(struct ieee80211_hw *hw, u32 value)
+ {
+ 	int ret = -EINVAL;
+ 	struct mm81x *mm = hw->priv;
+@@ -2005,8 +2003,6 @@ static struct ieee80211_vif *mm81x_rx_h_
+ 	struct ieee80211_vif *vif;
+ 	const struct ieee80211_hdr *hdr = (void *)skb->data;
+ 
+-	lockdep_assert_in_rcu_read_lock();
+-
+ 	for (vif_id = 0; vif_id < ARRAY_SIZE(mm->vifs); vif_id++) {
+ 		vif = mm81x_rcu_dereference_vif_id(mm, vif_id, true);
+ 		if (!vif)
+@@ -2046,8 +2042,6 @@ static void mm81x_rx_h_update_sta(struct
+ 	u8 *lookup = ieee80211_is_s1g_beacon(hdr->frame_control) ? hdr->addr1 :
+ 								   hdr->addr2;
+ 
+-	lockdep_assert_in_rcu_read_lock();
+-
+ 	sta = ieee80211_find_sta(vif, lookup);
+ 	if (!sta)
+ 		return;
+@@ -2068,8 +2062,6 @@ mm81x_rx_h_skb_get_vif(struct mm81x *mm,
+ 	u8 vif_id = u32_get_bits(le32_to_cpu(hdr_rx_status->flags),
+ 				 MM81X_RX_STATUS_FLAGS_VIF_ID);
+ 
+-	lockdep_assert_in_rcu_read_lock();
+-
+ 	/*
+ 	 * The firmware passes up broadcast mgmt frames such as beacons with a
+ 	 * NULL VIF. Assign the correct VIF. If no matching VIF was found, the
+@@ -2139,8 +2131,7 @@ static void mm81x_mac_ops_flush(struct i
+ 	}
+ }
+ 
+-static int mm81x_mac_ops_set_rts_threshold(struct ieee80211_hw *hw,
+-					   int radio_idx, u32 value)
++static int mm81x_mac_ops_set_rts_threshold(struct ieee80211_hw *hw, u32 value)
+ {
+ 	struct mm81x *mm = hw->priv;
+ 
+@@ -2150,11 +2141,10 @@ static int mm81x_mac_ops_set_rts_thresho
+ 
+ static void mm81x_mac_ops_sta_rc_update(struct ieee80211_hw *hw,
+ 					struct ieee80211_vif *vif,
+-					struct ieee80211_link_sta *link_sta,
++					struct ieee80211_sta *sta,
+ 					u32 changed)
+ {
+ 	struct mm81x *mm = hw->priv;
+-	struct ieee80211_sta *sta = link_sta->sta;
+ 	enum ieee80211_sta_state old_state;
+ 	enum ieee80211_sta_state new_state;
+ 
+@@ -2416,7 +2406,7 @@ static const struct ieee80211_ops mm81x_
+ 	.flush = mm81x_mac_ops_flush,
+ 	.set_frag_threshold = mm81x_mac_set_frag_threshold,
+ 	.set_rts_threshold = mm81x_mac_ops_set_rts_threshold,
+-	.link_sta_rc_update = mm81x_mac_ops_sta_rc_update,
++	.sta_rc_update = mm81x_mac_ops_sta_rc_update,
+ 	.sta_statistics = mm81x_mac_ops_sta_statistics,
+ 	.get_expected_throughput = mm81x_get_expected_throughput,
+ 	.hw_scan = mm81x_mac_ops_hw_scan,
+@@ -2543,7 +2533,7 @@ static void mm81x_mac_config_hw(struct m
+ 
+ static void mm81x_stale_tx_status_timer(struct timer_list *t)
+ {
+-	struct mm81x *mm = timer_container_of(mm, t, stale_status.timer);
++	struct mm81x *mm = from_timer(mm, t, stale_status.timer);
+ 
+ 	spin_lock_bh(&mm->stale_status.lock);
+ 	if (mm81x_hif_get_tx_status_pending_count(mm))
+@@ -2553,7 +2543,7 @@ static void mm81x_stale_tx_status_timer(
+ 
+ static void mm81x_stale_tx_status_timer_finish(struct mm81x *mm)
+ {
+-	timer_delete_sync_try(&mm->stale_status.timer);
++	try_to_del_timer_sync(&mm->stale_status.timer);
+ }
+ 
+ static void mm81x_mac_stale_tx_status_timer_init(struct mm81x *mm)
+--- a/drivers/net/wireless/morsemicro/mm81x/rc.c
++++ b/drivers/net/wireless/morsemicro/mm81x/rc.c
+@@ -41,7 +41,7 @@ static void mm81x_rc_work(struct work_st
+ 
+ static void mm81x_rc_timer(struct timer_list *t)
+ {
+-	struct mm81x_rc *mrc = timer_container_of(mrc, t, timer);
++	struct mm81x_rc *mrc = from_timer(mrc, t, timer);
+ 	struct mm81x *mm = mrc->mm;
+ 
+ 	queue_work(mm->net_wq, &mm->mrc.work);
+@@ -62,7 +62,7 @@ void mm81x_rc_init(struct mm81x *mm)
+ void mm81x_rc_deinit(struct mm81x *mm)
+ {
+ 	cancel_work_sync(&mm->mrc.work);
+-	timer_delete_sync_try(&mm->mrc.timer);
++	try_to_del_timer_sync(&mm->mrc.timer);
+ }
+ 
+ static void mm81x_rc_sta_config_guard_per_bw(struct ieee80211_sta *sta,
+--- a/drivers/net/wireless/morsemicro/mm81x/yaps.c
++++ b/drivers/net/wireless/morsemicro/mm81x/yaps.c
+@@ -107,7 +107,7 @@ static int mm81x_yaps_irq_handler(struct
+ 		set_bit(MM81X_HIF_EVT_RX_PEND, &mm->hif.event_flags);
+ 
+ 	if (status & BIT(MM81X_INT_YAPS_FC_PACKET_FREED_UP_IRQN)) {
+-		timer_delete_sync_try(&mm->hif.u.yaps.chip_queue_full.timer);
++		try_to_del_timer_sync(&mm->hif.u.yaps.chip_queue_full.timer);
+ 		set_bit(MM81X_HIF_EVT_TX_PACKET_FREED_UP_PEND,
+ 			&mm->hif.event_flags);
+ 	}
+@@ -584,7 +584,7 @@ int mm81x_yaps_get_tx_buffered_count(str
+ static void mm81x_yaps_tx_q_full_timer(struct timer_list *t)
+ {
+ 	struct mm81x_yaps *yaps =
+-		timer_container_of(yaps, t, chip_queue_full.timer);
++		from_timer(yaps, t, chip_queue_full.timer);
+ 
+ 	queue_work(yaps->mm->chip_wq, &yaps->mm->hif_work);
+ }
+@@ -597,7 +597,7 @@ static void mm81x_yaps_q_chip_full_timer
+ 
+ static void mm81x_yaps_q_chip_full_timer_finish(struct mm81x_yaps *yaps)
+ {
+-	timer_delete_sync_try(&yaps->chip_queue_full.timer);
++	try_to_del_timer_sync(&yaps->chip_queue_full.timer);
+ }
+ 
+ int mm81x_yaps_init(struct mm81x *mm)

@@ -28,7 +28,7 @@ PKG_DRIVERS = \
 	mac80211-hwsim \
 	mt7601u \
 	rsi91x rsi91x-usb rsi91x-sdio\
-	wlcore wl12xx wl18xx
+	wlcore wl12xx wl18xx mm81x
 
 PKG_CONFIG_DEPENDS:= \
 	CONFIG_PACKAGE_kmod-mac80211 \
@@ -75,6 +75,7 @@ config-y:= \
 	WLAN_VENDOR_INTERSIL \
 	WLAN_VENDOR_MARVELL \
 	WLAN_VENDOR_MEDIATEK \
+	WLAN_VENDOR_MORSEMICRO \
 	WLAN_VENDOR_RALINK \
 	WLAN_VENDOR_REALTEK \
 	WLAN_VENDOR_RSI \
@@ -253,6 +254,18 @@ define KernelPackage/wl18xx/description
  Kernel modules for TI WL18xx
 endef
 
+define KernelPackage/mm81x
+  $(call KernelPackage/mac80211/Default)
+  TITLE:=Driver for Morse Micro MM81x
+  URL:=https://wireless.wiki.kernel.org/en/users/drivers/mm81x
+  DEPENDS+= +kmod-mac80211 +kmod-lib-crc7 +mm81x-firmware +@DRIVER_11AH_SUPPORT
+  FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/morsemicro/mm81x/mm81x.ko
+  AUTOLOAD:=$(call AutoProbe,mm81x)
+endef
+
+define KernelPackage/mm81x/description
+ Kernel modules for Morse Micro MM81x
+endef
 
 ifdef CONFIG_PACKAGE_MAC80211_DEBUGFS
   config-y += \
@@ -271,6 +284,8 @@ ifdef CONFIG_PACKAGE_MAC80211_WEXT
 endif
 
 config-$(call config_package,mac80211-hwsim) += MAC80211_HWSIM
+config-$(call config_package,mm81x) += MM81X
+config-y += MM81X_USB MM81X_SDIO
 config-$(call config_package,mt7601u) += MT7601U
 config-y += WL_MEDIATEK
 
@@ -363,6 +378,7 @@ define Build/Patch
 	$(call PatchDir,$(PKG_BUILD_DIR),$(PATCH_DIR)/mwl,mwl/)
 	$(call PatchDir,$(PKG_BUILD_DIR),$(PATCH_DIR)/brcm,brcm/)
 	$(call PatchDir,$(PKG_BUILD_DIR),$(PATCH_DIR)/rtl,rtl/)
+	$(call PatchDir,$(PKG_BUILD_DIR),$(PATCH_DIR)/mm81x,mm81x/)
 	$(if $(QUILT),touch $(PKG_BUILD_DIR)/.quilt_used)
 endef
 
@@ -380,6 +396,7 @@ define Quilt/Refresh/Package
 	$(call Quilt/RefreshDir,$(PKG_BUILD_DIR),$(PATCH_DIR)/mwl,mwl/)
 	$(call Quilt/RefreshDir,$(PKG_BUILD_DIR),$(PATCH_DIR)/brcm,brcm/)
 	$(call Quilt/RefreshDir,$(PKG_BUILD_DIR),$(PATCH_DIR)/rtl,rtl/)
+	$(call Quilt/RefreshDir,$(PKG_BUILD_DIR),$(PATCH_DIR)/mm81x,mm81x/)
 endef
 
 define Build/Compile

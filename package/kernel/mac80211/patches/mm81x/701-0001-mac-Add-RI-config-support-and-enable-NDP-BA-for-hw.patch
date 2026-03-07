@@ -1,0 +1,77 @@
+--- a/drivers/net/wireless/morsemicro/mm81x/command.c
++++ b/drivers/net/wireless/morsemicro/mm81x/command.c
+@@ -617,3 +617,17 @@ int mm81x_cmd_get_disabled_channels(
+ 	return mm81x_cmd_tx(mm, (struct host_cmd_resp *)resp, &req, resp_len,
+ 			    0);
+ }
++
++int mm81x_cmd_config_ri(struct mm81x *mm, u16 vif_id, s8 ri)
++{
++	struct host_cmd_resp_set_response_indication resp;
++	struct host_cmd_req_set_response_indication req = {
++		.response_indication = ri,
++	};
++
++	mm81x_cmd_init(mm, &req.hdr, HOST_CMD_ID_SET_RESPONSE_INDICATION,
++			vif_id, sizeof(req));
++
++	return mm81x_cmd_tx(mm, (struct host_cmd_resp *)&resp,
++			   (struct host_cmd_req *)&req, sizeof(resp), 0);
++}
+--- a/drivers/net/wireless/morsemicro/mm81x/command.h
++++ b/drivers/net/wireless/morsemicro/mm81x/command.h
+@@ -80,5 +80,6 @@ int mm81x_cmd_set_frag_threshold(struct
+ int mm81x_cmd_get_disabled_channels(
+ 	struct mm81x *mm, struct host_cmd_resp_get_disabled_channels *resp,
+ 	uint resp_len);
++int mm81x_cmd_config_ri(struct mm81x *mm, u16 vif_id, s8 ri);
+ 
+ #endif /* !_MM81X_COMMAND_H_ */
+--- a/drivers/net/wireless/morsemicro/mm81x/command_defs.h
++++ b/drivers/net/wireless/morsemicro/mm81x/command_defs.h
+@@ -136,6 +136,7 @@ enum host_cmd_id {
+ 	HOST_CMD_ID_EVT_DISCONNECTED = 0x4010,
+ 	HOST_CMD_ID_EVT_BEACON_FILTER_MATCH = 0x4016,
+ 	HOST_CMD_ID_SET_CAPABILITIES = 0x8118,
++	HOST_CMD_ID_SET_RESPONSE_INDICATION = 0x8007,
+ 	HOST_CMD_ID_SET_TRANSMISSION_RATE = 0x8009,
+ 	HOST_CMD_ID_FORCE_ASSERT = 0x800E,
+ 	HOST_CMD_ID_GET_SET_GENERIC_PARAM = 0x003E,
+@@ -1665,4 +1666,14 @@ struct host_cmd_resp_get_set_generic_par
+ 	__le32 value;
+ } __packed;
+ 
++struct host_cmd_req_set_response_indication {
++	struct host_cmd_header hdr;
++	s8 response_indication;
++} __packed;
++
++struct host_cmd_resp_set_response_indication {
++	struct host_cmd_header hdr;
++	__le32 status;
++} __packed;
++
+ #endif
+--- a/drivers/net/wireless/morsemicro/mm81x/mac.c
++++ b/drivers/net/wireless/morsemicro/mm81x/mac.c
+@@ -1658,6 +1658,12 @@ static void mm81x_mac_ops_bss_info_chang
+ 			mm81x_err(mm, "mm81x_cmd_cfg_bss failed %d", ret);
+ 	}
+ 
++	if (changed & BSS_CHANGED_S1G_RI) {
++		ret = mm81x_cmd_config_ri(mm, mm_vif->id, info->s1g_ri);
++		if (ret)
++			mm81x_err(mm, "mm81x_cmd_config_ri failed %d", ret);
++	}
++
+ 	mutex_unlock(&mm->lock);
+ }
+ 
+@@ -2505,6 +2511,7 @@ static void mm81x_mac_config_hw(struct m
+ 	ieee80211_hw_set(hw, NEED_DTIM_BEFORE_ASSOC);
+ 	ieee80211_hw_set(hw, PS_NULLFUNC_STACK);
+ 	ieee80211_hw_set(hw, SUPPORTS_TX_FRAG);
++	ieee80211_hw_set(hw, SUPPORTS_NDP_BLOCKACK);
+ 
+ 	SET_IEEE80211_PERM_ADDR(hw, mm->macaddr);
+ 

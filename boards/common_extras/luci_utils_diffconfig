@@ -1,0 +1,4 @@
+# LuCI utility apps
+CONFIG_PACKAGE_luci-app-statistics=y
+CONFIG_PACKAGE_luci-app-ttyd=y
+CONFIG_PACKAGE_luci-app-morseupgrade=y

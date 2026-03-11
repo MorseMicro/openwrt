@@ -1,0 +1,24 @@
+# Usually, we'd include luci-ssl-openssl here, which would pull in
+# all the 'normal' luci bits and pieces. However, it pulls in the bootstrap
+# theme, which we don't want users to be able to select by default
+# (it works, but there are a few style issues with our new pages).
+
+# luci-light without bootstrap theme
+CONFIG_PACKAGE_luci-proto-ipv6=y
+CONFIG_PACKAGE_luci-app-firewall=y
+CONFIG_PACKAGE_luci-mod-admin-full=y
+CONFIG_PACKAGE_luci-proto-ppp=y
+CONFIG_PACKAGE_rpcd-mod-rrdns=y
+CONFIG_PACKAGE_uhttpd=y
+CONFIG_PACKAGE_uhttpd-mod-ubus=y
+
+# Add https support via openssl (luci-ssl-openssl)
+CONFIG_PACKAGE_libustream-openssl=y
+CONFIG_PACKAGE_openssl-util=y
+
+CONFIG_PACKAGE_luci-app-package-manager=y
+CONFIG_PACKAGE_luci-app-morseconfig=y
+CONFIG_PACKAGE_luci-mod-home=y
+CONFIG_PACKAGE_luci-theme-morseargon=y
+CONFIG_PACKAGE_luci-proto-batman-adv=y
+CONFIG_PACKAGE_luci-proto-relay=y

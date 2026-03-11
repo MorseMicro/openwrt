@@ -5,6 +5,13 @@
 / {
 	compatible = "morse,halowlink2", "mediatek,mt7621-soc";
 	model = "MorseMicro HaLowLink 2";
+
+	/* Use button for modeswitch instead of reset */
+	keys {
+		reset {
+			linux,code = <BTN_0>;
+		};
+	};
 };
 
 &sdhci {

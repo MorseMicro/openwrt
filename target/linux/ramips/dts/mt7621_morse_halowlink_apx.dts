@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+
+#include "mt7621_morse_halowlink.dtsi"
+
+/ {
+	compatible = "morse,halowlink-apx", "mediatek,mt7621-soc";
+	model = "MorseMicro HaLowLink APX";
+};
+
+&sdhci {
+	mm6108_sdio: mm6108_sdio@0 {
+		compatible = "morse,mm610x";
+		reset-gpios = <&gpio 6 0>;
+		power-gpios = <&gpio 7 0>,
+		              <&gpio 8 0>;
+		fem-4v3-gpios = <&gpio 27 0>;
+		status = "okay";
+		reg = <2>;
+		bus-width = <4>;
+	};
+};
+
+/* Rename the ports to match the LAN bridge */
+&switch0 {
+	ports {
+		port@0 {
+			label = "usblan";
+		};
+
+		port@2 {
+			label = "lan1";
+		};
+
+		wan: port@4 {
+			label = "lan2";
+		};
+	};
+};

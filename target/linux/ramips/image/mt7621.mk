@@ -965,7 +965,7 @@ define Device/dlink_dir-2150-r1
   KERNEL := $$(KERNEL)
   IMAGES += factory.bin
   IMAGE/factory.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | \
-	check-size | sign-dlink-ru e6587b35a6b34e07bedeca23e140322f 
+	check-size | sign-dlink-ru e6587b35a6b34e07bedeca23e140322f
 endef
 TARGET_DEVICES += dlink_dir-2150-r1
 
@@ -1423,7 +1423,7 @@ define Device/gemtek_wvrtm-1xxacn
   IMAGE_SIZE := 122368k
   DEVICE_VENDOR := Gemtek
   DEVICE_PACKAGES := kmod-gpio-nxp-74hc164 kmod-spi-gpio \
-  kmod-usb3 -uboot-envtools 
+  kmod-usb3 -uboot-envtools
 endef
 
 define Device/gemtek_wvrtm-127acn
@@ -2153,6 +2153,17 @@ define Device/morse_halowlink2
 endef
 TARGET_DEVICES += morse_halowlink2
 
+define Device/morse_halowlink_apx
+  $(Device/dsa-migration)
+  IMAGE_SIZE := 32448k
+  DEVICE_VENDOR := MorseMicro
+  DEVICE_MODEL := HaLowLink APX
+  DEVICE_IMG_NAME = $(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(call sanitize,$$(DEVICE_MODEL))$$(if $$(filter-out squashfs,$$(1)),-$$(1))$$(if $$(filter-out sysupgrade.bin, $$(2)),-$$(2),.bin)
+  DEVICE_PACKAGES := kmod-mmc-mt7620 kmod-mt7603 \
+	kmod-morse netifd-morse morse-fw-6108
+endef
+TARGET_DEVICES += morse_halowlink_apx
+
 define Device/mqmaker_witi
   $(Device/dsa-migration)
   $(Device/uimage-lzma-loader)
@@ -2481,7 +2492,7 @@ define Device/openfi_5pro
   $(Device/dsa-migration)
   IMAGE_SIZE := 65216k
   DEVICE_VENDOR := OpenFi
-  DEVICE_MODEL := 5Pro 
+  DEVICE_MODEL := 5Pro
   DEVICE_PACKAGES := kmod-mt7603 kmod-mt7615e kmod-mt7663-firmware-ap kmod-usb3 \
 	kmod-mmc-mtk
 endef

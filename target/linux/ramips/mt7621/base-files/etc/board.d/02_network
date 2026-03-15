@@ -186,6 +186,9 @@ ramips_setup_interfaces()
 	morse,halowlink2)
 		ucidef_set_interfaces_lan_wan "usblan lan" "wan"
 		;;
+	morse,halowlink-apx)
+		ucidef_set_interface_lan "usblan lan1 lan2" "dhcp"
+		;;
 	*)
 		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3 lan4" "wan"
 		;;

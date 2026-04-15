@@ -13,6 +13,13 @@
 	};
 };
 
+/* Keep the Linux kernel init LED phase visually uniform on APX. */
+&led1 {
+	linux,default-trigger = "default-on";
+	default-brightness = <255>;
+	default-mc-intensity = <0 255 0>;
+};
+
 &sdhci {
 	mm6108_sdio: mm6108_sdio@0 {
 		compatible = "morse,mm610x";

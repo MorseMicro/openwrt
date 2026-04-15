@@ -2161,6 +2161,7 @@ define Device/morse_halowlink_apx
   DEVICE_IMG_NAME = $(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(call sanitize,$$(DEVICE_MODEL))$$(if $$(filter-out squashfs,$$(1)),-$$(1))$$(if $$(filter-out sysupgrade.bin, $$(2)),-$$(2),.bin)
   DEVICE_PACKAGES := kmod-mmc-mt7620 kmod-mt7603 \
 	kmod-morse netifd-morse morse-fw-6108
+  SUPPORTED_DEVICES += morse,halowlink-apx
 endef
 TARGET_DEVICES += morse_halowlink_apx
 

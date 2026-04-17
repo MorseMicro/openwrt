@@ -47,6 +47,12 @@ menu "Global build settings"
 		select ALL_KMODS
 		select ALL_NONSHARED
 
+	config MORSE_CHIP_MM61X
+		bool "Use Morse MM61x profile"
+
+	config MORSE_CHIP_MM81X
+		bool "Use Morse MM81x profile"
+
 	config BUILDBOT
 		bool "Set build defaults for automatic builds (e.g. via buildbot)"
 		help

@@ -276,22 +276,27 @@ define Device/morse_ekh01_base
   IMAGE/factory.img.gz := boot-common | boot-2711 | boot-ekh01 | sdcard-img | gzip
 endef
 
-define Device/morse_mmx108-ekh01-sdio
+define Device/morse_mm6108-ekh01-sdio
   $(Device/morse_ekh01_base)
-  DEVICE_MODEL := MMx108-EKH01
+  DEVICE_MODEL := MM6108-EKH01
   DEVICE_VARIANT := SDIO
   SYSINFO_MODEL := $$(DEVICE_VENDOR) $$(DEVICE_MODEL) ($$(DEVICE_VARIANT))
-  # We name ourselves a generic morse,ekh01, and allow upgrading to this
-  # from any of the legacy images, even those that will require BCF forcing (at least on
-  # an upgrade the BCF will remain set).
-  # We keep morse,mmx108-ekh01-sdio on the list of supported devices for
-  # now as we temporarily used this name for internal builds.
-  SYSINFO_BOARD_NAME := morse,ekh01
   SUPPORTED_DEVICES += morse,ekh01 morse,ekh01-01 morse,ekh01v1 morse,ekh01v2 morse,ekh01-03 morse,ekh01-05us
   DISTROCONFIG_EXTRA := mmx10x-sdio
 endef
 ifeq ($(SUBTARGET),bcm2711)
-  TARGET_DEVICES += morse_mmx108-ekh01-sdio
+  TARGET_DEVICES += morse_mm6108-ekh01-sdio
+endif
+define Device/morse_mm8108-ekh01-sdio
+  $(Device/morse_ekh01_base)
+  DEVICE_MODEL := MM8108-EKH01
+  DEVICE_VARIANT := SDIO
+  SYSINFO_MODEL := $$(DEVICE_VENDOR) $$(DEVICE_MODEL) ($$(DEVICE_VARIANT))
+  SUPPORTED_DEVICES += morse,ekh01 morse,ekh01-01
+  DISTROCONFIG_EXTRA := mmx10x-sdio
+endef
+ifeq ($(SUBTARGET),bcm2711)
+  TARGET_DEVICES += morse_mm8108-ekh01-sdio
 endif
 
 define Device/morse_mm8108-ekh01-spi

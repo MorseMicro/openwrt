@@ -11,6 +11,8 @@ board=$(board_name)
 
 case "$board" in
 morse,ekh01 |\
+morse,mm6108-ekh01-sdio |\
+morse,mm8108-ekh01-sdio |\
 morse,mm6108-ekh01-spi |\
 morse,mm8108-ekh01-spi |\
 raspberrypi,model-b |\

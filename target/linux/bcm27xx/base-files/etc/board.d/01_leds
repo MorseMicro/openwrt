@@ -8,6 +8,8 @@ board_config_update
 
 case "$board" in
 morse,ekh01 |\
+morse,mm6108-ekh01-sdio |\
+morse,mm8108-ekh01-sdio |\
 morse,mm6108-ekh01-spi |\
 morse,mm8108-ekh01-spi)
 	# RPI's have a green LED that is by default connected to SD card activity.

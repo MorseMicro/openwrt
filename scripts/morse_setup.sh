@@ -75,7 +75,7 @@ EOF
     for b in boards/*; do
         if [ -e "$b/target_diffconfig" ]; then
             echo "  $(basename $b)"
-            sed -n 's/CONFIG_TARGET_.*_DEVICE_\(.*\)_\(.*\)=y/    \2 (\1 \2)/p' $b/target_diffconfig
+            sed -n 's/CONFIG_TARGET_.*_DEVICE_\(\([^_]*\)_\)\?\(.*\)=y/\2 \3/p' $b/target_diffconfig | awk '{if (NF==1) print "    "$1" ("$1")"; else print "    "$2" ("$1" "$2")"}'
             echo
         fi
     done
@@ -262,7 +262,7 @@ case "${MODE}" in
             FOUND_MULTIPROFILE_TARGET=0
             for b in boards/*; do
                 if [ -e "$b/target_diffconfig" ]; then
-                    if sed -n 's/CONFIG_TARGET_DEVICE_.*_DEVICE_.*_\(.*\)=y/\1/p' $b/target_diffconfig | grep -qxF "$BOARD"; then
+                    if sed -n 's/CONFIG_TARGET_.*_DEVICE_\(\([^_]*\)_\)\?\(.*\)=y/\3/p' $b/target_diffconfig | grep -qxF "$BOARD"; then
                         b="$(basename "$b")"
                         echo "No boards/$BOARD, but '$BOARD' will be built by boards/$b"
                         FOUND_MULTIPROFILE_TARGET=1

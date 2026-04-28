@@ -38,7 +38,7 @@ Once the build is complete images can be found in
 Create an /opt/openwrt directory to store toolchains, downloads and ccache:
 
     sudo mkdir -p /opt/openwrt
-    sudo chown -R "$(id -u):$(id -g)"
+    sudo chown -R "$(id -u):$(id -g)" /opt/openwrt
 
 You can then tell morse_setup.sh to download/configure a toolchain with -E
 (use -E for every invocation, even after initial download):

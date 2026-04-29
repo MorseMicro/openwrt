@@ -5,6 +5,12 @@
 / {
 	compatible = "morse,halowlink-apx", "mediatek,mt7621-soc";
 	model = "MorseMicro HaLowLink APX";
+
+	keys {
+		reset {
+			linux,code = <BTN_0>;
+		};
+	};
 };
 
 &sdhci {

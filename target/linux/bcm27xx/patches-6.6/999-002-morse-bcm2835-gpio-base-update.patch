@@ -20,4 +20,3 @@ index cfb51cf2f766..aa0234aca92e 100644
  	.ngpio = BCM2711_NUM_GPIOS,
  	.can_sleep = false,
  	.add_pin_ranges = bcm2835_add_pin_ranges_fallback,
-

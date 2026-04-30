@@ -40,4 +40,3 @@ index 8cc7a99927f9..0d8a660f2f33 100644
  	/* Flag indicating if the allocation of this struct is devres-managed */
  	bool			devm_allocated;
  
-

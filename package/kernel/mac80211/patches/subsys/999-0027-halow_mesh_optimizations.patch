@@ -1,8 +1,6 @@
-Index: backports-6.12.52/net/mac80211/mesh.h
-===================================================================
---- backports-6.12.52.orig/net/mac80211/mesh.h
-+++ backports-6.12.52/net/mac80211/mesh.h
-@@ -229,7 +229,13 @@ struct mesh_rmc {
+--- a/net/mac80211/mesh.h
++++ b/net/mac80211/mesh.h
+@@ -229,7 +229,13 @@
  #define MESH_MAX_MPATHS		1024
  
  /* Number of frames buffered per destination for unresolved destinations */
@@ -17,11 +15,9 @@ Index: backports-6.12.52/net/mac80211/mesh.h
  
  /* Public interfaces */
  /* Various */
-Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
-===================================================================
---- backports-6.12.52.orig/net/mac80211/mesh_hwmp.c
-+++ backports-6.12.52/net/mac80211/mesh_hwmp.c
-@@ -132,13 +132,13 @@ static int mesh_path_sel_frame_tx(enum m
+--- a/net/mac80211/mesh_hwmp.c
++++ b/net/mac80211/mesh_hwmp.c
+@@ -132,13 +132,13 @@
  
  	switch (action) {
  	case MPATH_PREQ:
@@ -37,7 +33,7 @@ Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
  		ie_len = 31;
  		pos = skb_put(skb, 2 + ie_len);
  		*pos++ = WLAN_EID_PREP;
-@@ -384,6 +384,32 @@ static bool is_metric_better(u32 x, u32
+@@ -384,6 +384,32 @@
  	return (x < y) && (x < (y - x / 10));
  }
  
@@ -70,7 +66,7 @@ Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
  /**
   * hwmp_route_info_get - Update routing info to originator and transmitter
   *
-@@ -408,6 +434,7 @@ static u32 hwmp_route_info_get(struct ie
+@@ -408,6 +434,7 @@
  	struct ieee80211_local *local = sdata->local;
  	struct mesh_path *mpath;
  	struct sta_info *sta;
@@ -78,7 +74,7 @@ Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
  	bool fresh_info;
  	const u8 *orig_addr, *ta;
  	u32 orig_sn, orig_metric;
-@@ -416,6 +443,7 @@ static u32 hwmp_route_info_get(struct ie
+@@ -416,6 +443,7 @@
  	bool flush_mpath = false;
  	bool process = true;
  	u8 hopcount;
@@ -86,13 +82,13 @@ Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
  
  	rcu_read_lock();
  	sta = sta_info_get(sdata, mgmt->sa);
-@@ -467,22 +495,26 @@ static u32 hwmp_route_info_get(struct ie
+@@ -467,22 +495,26 @@
  		mpath = mesh_path_lookup(sdata, orig_addr);
  		if (mpath) {
  			spin_lock_bh(&mpath->state_lock);
 +			mhwmp_dbg(sdata, "%s from:%pM->%pM new_metric:%d metric:%d hops:%d \n",
-+					action ? "PREP" : "PREQ", orig_addr, mgmt->sa, new_metric,
-+					mpath->metric, hopcount);
++				action ? "PREP" : "PREQ", orig_addr, mgmt->sa, new_metric,
++				mpath->metric, hopcount);
  			if (mpath->flags & MESH_PATH_FIXED)
  				fresh_info = false;
 -			else if ((mpath->flags & MESH_PATH_ACTIVE) &&
@@ -104,13 +100,15 @@ Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
 -						      sta ?
 -					      !is_metric_better(new_metric, mpath->metric) :
 -					      new_metric >= mpath->metric))) {
-+				(mpath->metric &&
-+				 (rcu_access_pointer(mpath->next_hop) != sta) &&
-+				 (mult_frac(new_metric, 10, 9) >= mpath->metric))) {
-+					mhwmp_dbg(sdata, "skip long path orig:%pM sa:%pM \n",
-+							orig_addr, mgmt->sa);
- 					process = false;
- 					fresh_info = false;
+-					process = false;
+-					fresh_info = false;
++					(mpath->metric &&
++					(rcu_access_pointer(mpath->next_hop) != sta) &&
++					(mult_frac(new_metric, 10, 9) >= mpath->metric))) {
++					 mhwmp_dbg(sdata, "skip long path orig:%pM sa:%pM \n",
++						orig_addr, mgmt->sa);
++					 process = false;
++					 fresh_info = false;
  				}
  			} else if (!(mpath->flags & MESH_PATH_ACTIVE)) {
  				bool have_sn, newer_sn, bounced;
@@ -119,7 +117,7 @@ Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
  				have_sn = mpath->flags & MESH_PATH_SN_VALID;
  				newer_sn = have_sn && SN_GT(orig_sn, mpath->sn);
  				bounced = have_sn &&
-@@ -496,7 +528,13 @@ static u32 hwmp_route_info_get(struct ie
+@@ -496,7 +528,13 @@
  					/* if SN is way different than what
  					 * we had then assume the other side
  					 * rebooted or restarted */;
@@ -133,7 +131,7 @@ Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
  					process = false;
  					fresh_info = false;
  				}
-@@ -508,6 +546,9 @@ static u32 hwmp_route_info_get(struct ie
+@@ -508,6 +546,9 @@
  				return 0;
  			}
  			spin_lock_bh(&mpath->state_lock);
@@ -143,7 +141,7 @@ Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
  		}
  
  		if (fresh_info) {
-@@ -519,6 +560,14 @@ static u32 hwmp_route_info_get(struct ie
+@@ -519,6 +560,14 @@
  			mpath->flags |= MESH_PATH_SN_VALID;
  			mpath->metric = new_metric;
  			mpath->sn = orig_sn;
@@ -158,7 +156,7 @@ Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
  			mpath->exp_time = time_after(mpath->exp_time, exp_time)
  					  ?  mpath->exp_time : exp_time;
  			mpath->hop_count = hopcount;
-@@ -529,6 +578,11 @@ static u32 hwmp_route_info_get(struct ie
+@@ -529,6 +578,11 @@
  			ewma_mesh_fail_avg_init(&sta->mesh->fail_avg);
  			/* init it at a low value - 0 start is tricky */
  			ewma_mesh_fail_avg_add(&sta->mesh->fail_avg, 1);
@@ -170,7 +168,7 @@ Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
  			mesh_path_tx_pending(mpath);
  			/* draft says preq_id should be saved to, but there does
  			 * not seem to be any use for it, skipping by now
-@@ -538,8 +592,11 @@ static u32 hwmp_route_info_get(struct ie
+@@ -538,8 +592,11 @@
  	}
  
  	/* Update and check transmitter routing info */
@@ -183,7 +181,7 @@ Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
  		fresh_info = false;
  	else {
  		fresh_info = true;
-@@ -554,11 +611,14 @@ static u32 hwmp_route_info_get(struct ie
+@@ -554,11 +611,14 @@
  				       last_hop_metric > mpath->metric))))
  				fresh_info = false;
  		} else {
@@ -198,7 +196,7 @@ Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
  			spin_lock_bh(&mpath->state_lock);
  		}
  
-@@ -569,6 +629,14 @@ static u32 hwmp_route_info_get(struct ie
+@@ -569,6 +629,14 @@
  			}
  			mesh_path_assign_nexthop(mpath, sta);
  			mpath->metric = last_hop_metric;
@@ -213,7 +211,7 @@ Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
  			mpath->exp_time = time_after(mpath->exp_time, exp_time)
  					  ?  mpath->exp_time : exp_time;
  			mpath->hop_count = 1;
-@@ -579,6 +647,11 @@ static u32 hwmp_route_info_get(struct ie
+@@ -579,6 +647,11 @@
  			ewma_mesh_fail_avg_init(&sta->mesh->fail_avg);
  			/* init it at a low value - 0 start is tricky */
  			ewma_mesh_fail_avg_add(&sta->mesh->fail_avg, 1);
@@ -225,7 +223,7 @@ Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
  			mesh_path_tx_pending(mpath);
  		} else
  			spin_unlock_bh(&mpath->state_lock);
-@@ -616,7 +689,7 @@ static void hwmp_preq_frame_process(stru
+@@ -616,7 +689,7 @@
  	mhwmp_dbg(sdata, "received PREQ from %pM\n", orig_addr);
  
  	if (ether_addr_equal(target_addr, sdata->vif.addr)) {
@@ -234,7 +232,7 @@ Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
  		forward = false;
  		reply = true;
  		target_metric = 0;
-@@ -823,6 +896,10 @@ static void hwmp_perr_frame_process(stru
+@@ -823,6 +896,10 @@
  		    !(mpath->flags & MESH_PATH_FIXED) &&
  		    (!(mpath->flags & MESH_PATH_SN_VALID) ||
  		    SN_GT(target_sn, mpath->sn)  || target_sn == 0)) {
@@ -245,7 +243,7 @@ Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
  			mpath->flags &= ~MESH_PATH_ACTIVE;
  			if (target_sn != 0)
  				mpath->sn = target_sn;
-@@ -1108,6 +1185,7 @@ void mesh_path_start_discovery(struct ie
+@@ -1108,6 +1185,7 @@
  			mpath->flags |= MESH_PATH_RESOLVING;
  			mpath->discovery_retries = 0;
  			mpath->discovery_timeout = disc_timeout_jiff(sdata);
@@ -253,7 +251,7 @@ Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
  		}
  	} else if (!(mpath->flags & MESH_PATH_RESOLVING) ||
  			mpath->flags & MESH_PATH_RESOLVED) {
-@@ -1188,6 +1266,7 @@ int mesh_nexthop_resolve(struct ieee8021
+@@ -1188,6 +1266,7 @@
  	/* no nexthop found, start resolving */
  	mpath = mesh_path_lookup(sdata, target_addr);
  	if (!mpath) {
@@ -261,7 +259,7 @@ Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
  		mpath = mesh_path_add(sdata, target_addr);
  		if (IS_ERR(mpath)) {
  			mesh_path_discard_frame(sdata, skb);
-@@ -1195,13 +1274,16 @@ int mesh_nexthop_resolve(struct ieee8021
+@@ -1195,13 +1274,16 @@
  		}
  	}
  
@@ -283,7 +281,7 @@ Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
  	info->control.flags |= IEEE80211_TX_INTCFL_NEED_TXPROCESSING;
  	ieee80211_set_qos_hdr(sdata, skb);
  	skb_queue_tail(&mpath->frame_queue, skb);
-@@ -1245,18 +1327,37 @@ static int mesh_nexthop_lookup_nolearn(s
+@@ -1245,18 +1327,37 @@
  	return 0;
  }
  
@@ -317,7 +315,7 @@ Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
 +	   (!addr || ether_addr_equal(sdata->vif.addr, addr)))
  		mesh_queue_preq(mpath, PREQ_Q_F_START | PREQ_Q_F_REFRESH);
 +
-+	if (hwmp_is_mpath_optimal(mpath)) {
++	if (hwmp_is_mpath_optimal(mpath) && mpath->hop_count == 1) {
 +		/* Refresh path, if path is being actively used & optimal */
 +		unsigned long exp_time =
 +			msecs_to_jiffies(sdata->u.mesh.mshcfg.dot11MeshHWMPactivePathTimeout);
@@ -327,25 +325,44 @@ Index: backports-6.12.52/net/mac80211/mesh_hwmp.c
  }
  
  /**
-@@ -1317,10 +1418,11 @@ void mesh_path_timer(struct timer_list *
+@@ -1316,12 +1417,28 @@
+ 		mpath->flags &= ~(MESH_PATH_RESOLVING | MESH_PATH_RESOLVED);
  		spin_unlock_bh(&mpath->state_lock);
  	} else if (mpath->discovery_retries < max_preq_retries(sdata)) {
- 		++mpath->discovery_retries;
+-		++mpath->discovery_retries;
 -		mpath->discovery_timeout *= 2;
-+		mpath->discovery_timeout = min(mpath->discovery_timeout * 2,
-+			msecs_to_jiffies(MESH_MAX_MPATH_DISCOVERY_TIMEOUT));
- 		mpath->flags &= ~MESH_PATH_REQ_QUEUED;
- 		spin_unlock_bh(&mpath->state_lock);
+-		mpath->flags &= ~MESH_PATH_REQ_QUEUED;
+-		spin_unlock_bh(&mpath->state_lock);
 -		mesh_queue_preq(mpath, 0);
-+		mesh_queue_preq(mpath, PREQ_Q_F_REFRESH);
- 	} else {
+-	} else {
++        mpath->discovery_retries++;
++        /* Fast fallback to gate */
++        if (!mpath->is_gate && mesh_gate_num(sdata) > 0 &&
++            mpath->discovery_retries >= max_preq_retries(sdata) / 2) {
++            mpath->flags &= ~(MESH_PATH_RESOLVING |
++                            MESH_PATH_RESOLVED |
++                            MESH_PATH_REQ_QUEUED);
++            mpath->exp_time = jiffies;
++            spin_unlock_bh(&mpath->state_lock);
++
++            ret = mesh_path_send_to_gates(mpath);
++            if (ret)
++                mhwmp_dbg(sdata, "Fast fallback: no gate was reachable\n");
++            return;
++        }
++        /* Continue retrying PREQ */
++        mpath->discovery_timeout = min(mpath->discovery_timeout * 2,
++                            msecs_to_jiffies(MESH_MAX_MPATH_DISCOVERY_TIMEOUT));
++        mpath->flags &= ~MESH_PATH_REQ_QUEUED;
++        spin_unlock_bh(&mpath->state_lock);
++        mesh_queue_preq(mpath, PREQ_Q_F_REFRESH);
++    } else {
  		mpath->flags &= ~(MESH_PATH_RESOLVING |
  				  MESH_PATH_RESOLVED |
-Index: backports-6.12.52/net/mac80211/mesh_pathtbl.c
-===================================================================
---- backports-6.12.52.orig/net/mac80211/mesh_pathtbl.c
-+++ backports-6.12.52/net/mac80211/mesh_pathtbl.c
-@@ -779,6 +779,12 @@ void mesh_plink_broken(struct sta_info *
+ 				  MESH_PATH_REQ_QUEUED);
+--- a/net/mac80211/mesh_pathtbl.c
++++ b/net/mac80211/mesh_pathtbl.c
+@@ -779,6 +779,12 @@
  		if (rcu_access_pointer(mpath->next_hop) == sta &&
  		    mpath->flags & MESH_PATH_ACTIVE &&
  		    !(mpath->flags & MESH_PATH_FIXED)) {
@@ -358,11 +375,9 @@ Index: backports-6.12.52/net/mac80211/mesh_pathtbl.c
  			spin_lock_bh(&mpath->state_lock);
  			mpath->flags &= ~MESH_PATH_ACTIVE;
  			++mpath->sn;
-Index: backports-6.12.52/net/mac80211/rx.c
-===================================================================
---- backports-6.12.52.orig/net/mac80211/rx.c
-+++ backports-6.12.52/net/mac80211/rx.c
-@@ -2992,21 +2992,13 @@ ieee80211_rx_mesh_data(struct ieee80211_
+--- a/net/mac80211/rx.c
++++ b/net/mac80211/rx.c
+@@ -2992,21 +2992,13 @@
  		memcpy(fwd_hdr->addr2, sdata->vif.addr, ETH_ALEN);
  		/* update power mode indication when forwarding */
  		ieee80211_mps_set_frame_flags(sdata, NULL, fwd_hdr);
@@ -387,10 +402,8 @@ Index: backports-6.12.52/net/mac80211/rx.c
  	IEEE80211_IFSTA_MESH_CTR_INC(ifmsh, fwded_frames);
  	ieee80211_set_qos_hdr(sdata, fwd_skb);
  	ieee80211_add_pending_skb(local, fwd_skb);
-Index: backports-6.12.52/net/wireless/mesh.c
-===================================================================
---- backports-6.12.52.orig/net/wireless/mesh.c
-+++ backports-6.12.52/net/wireless/mesh.c
+--- a/net/wireless/mesh.c
++++ b/net/wireless/mesh.c
 @@ -18,7 +18,7 @@
  #define MESH_CONF_T 		100
  #define MESH_HOLD_T 		100
@@ -400,7 +413,7 @@ Index: backports-6.12.52/net/wireless/mesh.c
  #define MESH_RANN_INTERVAL      5000
  #define MESH_PATH_TO_ROOT_TIMEOUT      6000
  #define MESH_ROOT_INTERVAL     5000
-@@ -31,22 +31,22 @@
+@@ -31,16 +31,16 @@
   */
  #define MESH_PREQ_MIN_INT	10
  #define MESH_PERR_MIN_INT	100
@@ -420,10 +433,3 @@ Index: backports-6.12.52/net/wireless/mesh.c
  #define MESH_MIN_DISCOVERY_TIMEOUT (2 * MESH_DIAM_TRAVERSAL_TIME)
  
  /* Default maximum number of established plinks per interface */
- #define MESH_MAX_ESTAB_PLINKS	32
- 
--#define MESH_MAX_PREQ_RETRIES	4
-+#define MESH_MAX_PREQ_RETRIES	6
- 
- #define MESH_SYNC_NEIGHBOR_OFFSET_MAX 50
- 

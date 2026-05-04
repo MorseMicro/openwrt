@@ -42,7 +42,7 @@ Usage:
                                     files from the board config. Often combined with '-x'
                                     for custom configurations.
 
-            -x                      apply extra diffconfig options in common_extra. One of these is
+            -x                      Apply extra diffconfig options in common_extra. One of these is
                                     'dev' (no minification, use local git-src if linked, etc.).
 
             -g                      Override the source of a package to use a git-src tree.

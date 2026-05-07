@@ -11,13 +11,10 @@
 			linux,code = <BTN_0>;
 		};
 	};
-};
 
-/* Keep the Linux kernel init LED phase visually uniform on APX. */
-&led1 {
-	linux,default-trigger = "default-on";
-	default-brightness = <255>;
-	default-mc-intensity = <0 255 0>;
+	aliases {
+		led-link = &led0;
+	};
 };
 
 &sdhci {

@@ -32,7 +32,7 @@ define KernelPackage/camera-bcm2835-unicam
     $(LINUX_DIR)/drivers/staging/vc04_services/bcm2835-isp/bcm2835-isp.ko \
     $(LINUX_DIR)/drivers/media/platform/bcm2835/bcm2835-unicam.ko
   AUTOLOAD:=$(call AutoLoad,65,bcm2835-unicam bcm2835-isp)
-  $(call AddDepends/video,@TARGET_bcm27xx +kmod-vchiq-mmal-bcm2835 +kmod-video-videobuf2 +kmod-videobuf2-dma-contig +kmod-video-fwnode +kmod-video-async)
+  $(call AddDepends/video,@TARGET_bcm27xx +kmod-vchiq-mmal-bcm2835 +kmod-video-videobuf2 +kmod-video-dma-contig +kmod-video-fwnode +kmod-video-async)
 endef
 
 define KernelPackage/camera-bcm2835-unicam/description

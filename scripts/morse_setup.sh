@@ -333,7 +333,7 @@ case "${MODE}" in
         fi
 
         echo Make defconfig...
-        make defconfig
+        KCONFIG_WARN_UNKNOWN_SYMBOLS=1 KCONFIG_WERROR=1 make defconfig
 
         # Remove and recreate symlinks for git-src overrides.
         # Only remove symlinks in git-src, so we dont destroy any user content.
@@ -368,6 +368,6 @@ case "${MODE}" in
             echo "Selected target defconfig was not found!" 1>&2
             exit 2
         fi
-        make defconfig
+        KCONFIG_WARN_UNKNOWN_SYMBOLS=1 KCONFIG_WERROR=1 make defconfig
         ;;
 esac

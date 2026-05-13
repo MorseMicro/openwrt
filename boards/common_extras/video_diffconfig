@@ -21,7 +21,7 @@ CONFIG_PACKAGE_gst1-mod-udp=y
 CONFIG_PACKAGE_gst1-mod-rtsp=y
 CONFIG_PACKAGE_gst1-mod-jpeg=y
 CONFIG_PACKAGE_gst1-mod-videotestsrc=y
-CONFIG_PACKAGE_gst1-mod-videoconvert=y
+CONFIG_PACKAGE_gst1-mod-videoconvertscale=y
 CONFIG_PACKAGE_gst1-mod-rtspclientsink=y
 
 # v4l

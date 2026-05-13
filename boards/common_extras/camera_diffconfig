@@ -6,7 +6,7 @@ CONFIG_PACKAGE_camera-onvif-server=y
 
 # Video encode/decode (for h264 hardware encode via libcamera)
 CONFIG_PACKAGE_kmod-video-core=y
-CONFIG_PACKAGE_kmod-video-codec-bcm2835=y
+CONFIG_PACKAGE_kmod-codec-bcm2835=y
 
 # Actual camera driver
 CONFIG_PACKAGE_kmod-camera-bcm2835-unicam=y

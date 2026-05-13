@@ -13,20 +13,38 @@ environment. This has been tested with Ubuntu 20.04, 22.04 and 24.04.
 Install build environment packages with
 
     sudo apt update
-    sudo apt install build-essential clang flex g++ gawk gcc-multilib \
-        git gettext libncurses5-dev libssl-dev python3-distutils rsync \
-        unzip zlib1g-dev swig
+    sudo apt install build-essential clang flex gawk git gettext \
+        libncurses-dev libssl-dev rsync unzip zlib1g-dev swig golang-go
+
+For Ubuntu 20.04/22.04
+
+    sudo apt install python3-distutils
+
+For Ubuntu 24.04
+
+    sudo apt install python3-setuptools
+
+Optionally, for building x86 binaries on x86_64 hosts
+
+    sudo apt install gcc-multilib
+
+For more details regarding more specific environments, see [Build System Setup](https://openwrt.org/docs/guide-developer/build-system/install-buildsystem)
 
 ## Usage
+
+Clone the repo
+
+    git clone https://github.com/MorseMicro/openwrt.git
+    cd openwrt
 
 Run the `./scripts/morse_setup.sh` script to configure the build for
 your board of choice. Custom boards can be added to the `boards`
 folder and used as a target. See an existing board for the information
 which should be contained in the diffconfigs.
 
-For example, to create a `.config` file for an HaLowLink1:
+For example, to create a `.config` file for a HaLowLink2
 
-    ./scripts/morse_setup.sh -i -b halowlink1
+    ./scripts/morse_setup.sh -i -b halowlink2
 
 To list all possible boards and other options, use -h.
 
@@ -37,7 +55,7 @@ After configuration is complete, run the build with
 If an error occurred during the build, see the logs directory.
 
 Once the build is complete images can be found in
-`bin/target/<platform>/<target>/`
+`bin/targets/<platform>/<target>/`
 
 ## Speeding up builds
 
@@ -49,7 +67,7 @@ Create an /opt/openwrt directory to store toolchains, downloads and ccache:
 You can then tell morse_setup.sh to download/configure a toolchain with -E
 (use -E for every invocation, even after initial download):
 
-    ./scripts/morse_setup.sh -i -E -b halowlink1
+    ./scripts/morse_setup.sh -i -E -b halowlink2
 
 Having a directory that's out of the current tree will make it easier
 to have multiple checkouts/worktrees and run `make distclean` or similar

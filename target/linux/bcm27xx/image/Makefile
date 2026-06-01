@@ -267,6 +267,7 @@ define Device/morse_ekh01_base
   SYSINFO_BOARD_NAME := $(subst _,$(comma),$(1))
   SUPPORTED_DEVICES := $$(SYSINFO_BOARD_NAME)
   DEVICE_VENDOR := MorseMicro
+  DEVICE_PACKAGES += kmod-morse netifd-morse
   # remove the factory image (causes confusion)
   IMAGES := sysupgrade.img.gz
   # Simplify by removing board and OpenWRT version.
@@ -282,6 +283,7 @@ define Device/morse_mm6108-ekh01-sdio
   DEVICE_VARIANT := SDIO
   SYSINFO_MODEL := $$(DEVICE_VENDOR) $$(DEVICE_MODEL) ($$(DEVICE_VARIANT))
   SUPPORTED_DEVICES += morse,ekh01 morse,ekh01-01 morse,ekh01v1 morse,ekh01v2 morse,ekh01-03 morse,ekh01-05us
+  DEVICE_PACKAGES += morse-fw-6108
   DISTROCONFIG_EXTRA := mmx10x-sdio
 endef
 ifeq ($(SUBTARGET),bcm2711)
@@ -293,6 +295,7 @@ define Device/morse_mm8108-ekh01-sdio
   DEVICE_VARIANT := SDIO
   SYSINFO_MODEL := $$(DEVICE_VENDOR) $$(DEVICE_MODEL) ($$(DEVICE_VARIANT))
   SUPPORTED_DEVICES += morse,ekh01 morse,ekh01-01
+  DEVICE_PACKAGES += morse-fw-8108
   DISTROCONFIG_EXTRA := mmx10x-sdio
 endef
 ifeq ($(SUBTARGET),bcm2711)
@@ -305,6 +308,7 @@ define Device/morse_mm8108-ekh01-spi
   DEVICE_VARIANT := SPI
   SYSINFO_MODEL := $$(DEVICE_VENDOR) $$(DEVICE_MODEL) ($$(DEVICE_VARIANT))
   SUPPORTED_DEVICES += morse,ekh01 morse,ekh01-01
+  DEVICE_PACKAGES += morse-fw-8108
   DISTROCONFIG_EXTRA := mm810x-spi
 endef
 ifeq ($(SUBTARGET),bcm2711)
@@ -317,6 +321,7 @@ define Device/morse_mm6108-ekh01-spi
   DEVICE_VARIANT := SPI
   SYSINFO_MODEL := $$(DEVICE_VENDOR) $$(DEVICE_MODEL) ($$(DEVICE_VARIANT))
   SUPPORTED_DEVICES += morse,ekh01 morse,ekh01v1 morse,ekh01v2 morse,ekh01-03 morse,ekh01-05us
+  DEVICE_PACKAGES += morse-fw-6108
   DISTROCONFIG_EXTRA := mm610x-spi
 endef
 ifeq ($(SUBTARGET),bcm2711)

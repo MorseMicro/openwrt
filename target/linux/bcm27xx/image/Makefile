@@ -287,7 +287,7 @@ define Device/morse_mmx108-ekh01-sdio
   # We keep morse,mmx108-ekh01-sdio on the list of supported devices for
   # now as we temporarily used this name for internal builds.
   SYSINFO_BOARD_NAME := morse,ekh01
-  SUPPORTED_DEVICES += morse,ekh01 morse,ekh01-01 morse,ekh01v1 morse,ekh01v2 morse,ekh01-03 morse,ekh01-05us
+  SUPPORTED_DEVICES += morse,ekh01 morse,ekh01-01 morse,ekh01v1 morse,ekh01v2 morse,ekh01-03 morse,ekh01-05us morse,mm8108-ekh01-sdio morse,mm6108-ekh01-sdio
   DISTROCONFIG_EXTRA := mmx10x-sdio
 endef
 ifeq ($(SUBTARGET),bcm2711)

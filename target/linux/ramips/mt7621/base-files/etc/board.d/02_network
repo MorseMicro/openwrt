@@ -187,7 +187,9 @@ ramips_setup_interfaces()
 		ucidef_set_interfaces_lan_wan "usblan lan" "wan"
 		;;
 	morse,halowlink-apx)
-		ucidef_set_interface_lan "lan2 usblan lan1" "dhcp"
+		# morse-modeset-apx switches this to dhcp for
+		# the standard APX product.
+		ucidef_set_interface_lan "lan2 usblan lan1"
 		;;
 	*)
 		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3 lan4" "wan"

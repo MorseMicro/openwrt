@@ -2123,47 +2123,111 @@ define Device/mikrotik_routerboard-m33g
 endef
 TARGET_DEVICES += mikrotik_routerboard-m33g
 
-define Device/morse_halowlink1
+define Device/morse_halowlink1_base
   $(Device/dsa-migration)
   IMAGE_SIZE := 32448k
   UBOOT_OFFSET := 512k
   UBOOT_TARGET := mt7621_morsemicro_halowlink1
   UBOOT_IMAGE := u-boot.bin
   UBOOT_PATH := $(STAGING_DIR_IMAGE)/$$(UBOOT_TARGET)-$$(UBOOT_IMAGE)
+  DEVICE_DTS := mt7621_morse_halowlink1
   DEVICE_VENDOR := MorseMicro
-  DEVICE_MODEL := HaLowLink 1
-  # Generate openwrt-<vercode>-<model>-$1-$2
-  # If $1=squashfs remove, likewise with $2=sysupgrade.bin, for simpler names.
-  # So a 'normal' image will look like openwrt-morse-2.7.0-halowlink1.bin
-  DEVICE_IMG_NAME = $(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(call sanitize,$$(DEVICE_MODEL))$$(if $$(filter-out squashfs,$$(1)),-$$(1))$$(if $$(filter-out sysupgrade.bin, $$(2)),-$$(2),.bin)
+  # DEVICE_MODEL is set per-variant below: the product uses the HaLowLink 1
+  # product name, while the eval kit uses its own MM6108-EKH model name.
+  BOARD_NAME := halowlink1
   DEVICE_PACKAGES := kmod-mmc-mt7620 kmod-mt7603 \
-	kmod-morse netifd-morse morse-fw-6108
-  SUPPORTED_DEVICES += morse,artini
+    kmod-morse netifd-morse morse-fw-6108
+  SUPPORTED_DEVICES := morse,halowlink1
+  # IMAGE_PREFIX is openwrt-<vercode>-<sanitized-model>; each variant below
+  # builds its own DEVICE_IMG_NAME from it.
+  IMAGE_PREFIX = $(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(IMG_PREFIX_EXTRA)$$(call sanitize,$$(DEVICE_MODEL))
+endef
+
+define Device/morse_halowlink1
+  $(Device/morse_halowlink1_base)
+  DEVICE_MODEL := HaLowLink 1
+  # Strip squashfs/sysupgrade.bin to keep the historical short name, e.g.
+  # openwrt-morse-2.7.0-halowlink-1.bin
+  DEVICE_IMG_NAME = $$(IMAGE_PREFIX)$$(if $$(filter-out squashfs,$$(1)),-$$(1))$$(if $$(filter-out sysupgrade.bin,$$(2)),-$$(2),.bin)
 endef
 TARGET_DEVICES += morse_halowlink1
 
-define Device/morse_halowlink2
+define Device/morse_ekh_halowlink1
+  $(Device/morse_halowlink1_base)
+  DEVICE_MODEL := MM6108-EKH-HaLowLink-1
+  # Eval images keep the full sysupgrade-style name, e.g.
+  # openwrt-morse-2.7.0-mm6108-ekh-halowlink-1-squashfs-sysupgrade.bin
+  DEVICE_IMG_NAME = $$(IMAGE_PREFIX)-$$(1)-$$(2)
+endef
+TARGET_DEVICES += morse_ekh_halowlink1
+
+define Device/morse_halowlink2_base
   $(Device/dsa-migration)
   IMAGE_SIZE := 32448k
   DEVICE_VENDOR := MorseMicro
-  DEVICE_MODEL := HaLowLink 2
-  DEVICE_IMG_NAME = $(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(call sanitize,$$(DEVICE_MODEL))$$(if $$(filter-out squashfs,$$(1)),-$$(1))$$(if $$(filter-out sysupgrade.bin, $$(2)),-$$(2),.bin)
+  # DEVICE_MODEL is set per-variant below: the product uses the HaLowLink 2
+  # product name, while the eval kit uses its own MM8108-EKH model name.
+  BOARD_NAME := halowlink2
+  DEVICE_DTS := mt7621_morse_halowlink2
   DEVICE_PACKAGES := kmod-mmc-mt7620 kmod-mt7603 \
 	kmod-morse netifd-morse morse-fw-8108
+  SUPPORTED_DEVICES := morse,halowlink2
+  # IMAGE_PREFIX is openwrt-<vercode>-<sanitized-model>; each variant below
+  # builds its own DEVICE_IMG_NAME from it.
+  IMAGE_PREFIX = $(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(IMG_PREFIX_EXTRA)$$(call sanitize,$$(DEVICE_MODEL))
+endef
+
+define Device/morse_halowlink2
+  $(Device/morse_halowlink2_base)
+  DEVICE_MODEL := HaLowLink 2
+  # Strip squashfs/sysupgrade.bin to keep the historical short name, e.g.
+  # openwrt-morse-2.7.0-halowlink-2.bin
+  DEVICE_IMG_NAME = $$(IMAGE_PREFIX)$$(if $$(filter-out squashfs,$$(1)),-$$(1))$$(if $$(filter-out sysupgrade.bin,$$(2)),-$$(2),.bin)
 endef
 TARGET_DEVICES += morse_halowlink2
 
-define Device/morse_halowlink_apx
+define Device/morse_ekh_halowlink2
+  $(Device/morse_halowlink2_base)
+  DEVICE_MODEL := MM8108-EKH-HaLowLink-2
+  # Eval images keep the full sysupgrade-style name, e.g.
+  # openwrt-morse-2.7.0-mm8108-ekh-halowlink-2-squashfs-sysupgrade.bin
+  DEVICE_IMG_NAME = $$(IMAGE_PREFIX)-$$(1)-$$(2)
+endef
+TARGET_DEVICES += morse_ekh_halowlink2
+
+define Device/morse_halowlink_apx_base
   $(Device/dsa-migration)
   IMAGE_SIZE := 32448k
   DEVICE_VENDOR := MorseMicro
-  DEVICE_MODEL := HaLowLink APX
-  DEVICE_IMG_NAME = $(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(call sanitize,$$(DEVICE_MODEL))$$(if $$(filter-out squashfs,$$(1)),-$$(1))$$(if $$(filter-out sysupgrade.bin, $$(2)),-$$(2),.bin)
+  # DEVICE_MODEL is set per-variant below: the product uses the HaLowLink APX
+  # product name, while the eval kit uses its own MM6108-EKH model name.
+  BOARD_NAME := halowlink-apx
+  DEVICE_DTS := mt7621_morse_halowlink_apx
   DEVICE_PACKAGES := kmod-mmc-mt7620 kmod-mt7603 \
 	kmod-morse netifd-morse morse-fw-6108
-  SUPPORTED_DEVICES += morse,halowlink-apx
+  SUPPORTED_DEVICES := morse,halowlink-apx
+  # IMAGE_PREFIX is openwrt-<vercode>-<sanitized-model>; each variant below
+  # builds its own DEVICE_IMG_NAME from it.
+  IMAGE_PREFIX = $(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(IMG_PREFIX_EXTRA)$$(call sanitize,$$(DEVICE_MODEL))
+endef
+
+define Device/morse_halowlink_apx
+  $(Device/morse_halowlink_apx_base)
+  DEVICE_MODEL := HaLowLink APX
+  # Strip squashfs/sysupgrade.bin to keep the historical short name, e.g.
+  # openwrt-morse-2.7.0-halowlink-apx.bin
+  DEVICE_IMG_NAME = $$(IMAGE_PREFIX)$$(if $$(filter-out squashfs,$$(1)),-$$(1))$$(if $$(filter-out sysupgrade.bin,$$(2)),-$$(2),.bin)
 endef
 TARGET_DEVICES += morse_halowlink_apx
+
+define Device/morse_ekh_halowlink_apx
+  $(Device/morse_halowlink_apx_base)
+  DEVICE_MODEL := MM6108-EKH-HaLowLink-APX
+  # Eval images keep the full sysupgrade-style name, e.g.
+  # openwrt-morse-2.7.0-mm6108-ekh-halowlink-apx-squashfs-sysupgrade.bin
+  DEVICE_IMG_NAME = $$(IMAGE_PREFIX)-$$(1)-$$(2)
+endef
+TARGET_DEVICES += morse_ekh_halowlink_apx
 
 define Device/mqmaker_witi
   $(Device/dsa-migration)

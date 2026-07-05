@@ -1,0 +1,107 @@
+From b3d519330554b0b9e662cefebba854e0a7c1a592 Mon Sep 17 00:00:00 2001
+From: Lachlan Hodges <lachlan.hodges@morsemicro.com>
+Date: Tue, 2 Jun 2026 16:22:24 +1000
+Subject: [PATCH] wifi: mac80211: basic S1G rx rate reporting support
+
+Introduce basic rate encoding/decoding for S1G stas such that the
+usermode rx reporting is relevant as it currently uses VHT calculations
+which are obviously wildy different to S1G. Sample iw output (with the
+associated iw patches applied):
+
+Connected to 0c:bf:74:00:21:c4 (on wlan0)
+        SSID: wifi_halow
+        freq: 923.500
+        RX: 7325230 bytes (4756 packets)
+        TX: 190044 bytes (2238 packets)
+        signal: -38 dBm
+        rx bitrate: 43.3 MBit/s S1G-MCS 9 8MHz short GI S1G-NSS 1
+        tx bitrate: 43.3 MBit/s S1G-MCS 9 8MHz short GI S1G-NSS 1
+        bss flags:
+        dtim period: 1
+        beacon int: 100
+
+Signed-off-by: Lachlan Hodges <lachlan.hodges@morsemicro.com>
+Link: https://patch.msgid.link/20260602062224.1792985-1-lachlan.hodges@morsemicro.com
+Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+---
+ include/net/mac80211.h  |  1 +
+ net/mac80211/rx.c       |  8 ++++++++
+ net/mac80211/sta_info.c |  7 +++++++
+ net/mac80211/sta_info.h | 11 ++++++++++-
+ 4 files changed, 26 insertions(+), 1 deletion(-)
+
+--- a/include/net/mac80211.h
++++ b/include/net/mac80211.h
+@@ -1573,6 +1573,7 @@ enum mac80211_rx_encoding {
+ 	RX_ENC_VHT,
+ 	RX_ENC_HE,
+ 	RX_ENC_EHT,
++	RX_ENC_S1G,
+ };
+ 
+ /**
+--- a/net/mac80211/rx.c
++++ b/net/mac80211/rx.c
+@@ -5464,6 +5464,14 @@ void ieee80211_rx_list(struct ieee80211_
+ 				      status->rate_idx, status->nss, status->eht.gi))
+ 				goto drop;
+ 			break;
++		case RX_ENC_S1G:
++			if (WARN_ONCE(status->rate_idx > 12 ||
++				      !status->nss ||
++				      status->nss > 4,
++				      "Rate marked as an S1G rate but data is invalid: MCS: %d, NSS: %d\n",
++				      status->rate_idx, status->nss))
++				goto drop;
++			break;
+ 		default:
+ 			WARN_ON_ONCE(1);
+ 			fallthrough;
+--- a/net/mac80211/sta_info.c
++++ b/net/mac80211/sta_info.c
+@@ -2497,6 +2497,13 @@ static void sta_stats_decode_rate(struct
+ 		rinfo->eht_gi = STA_STATS_GET(EHT_GI, rate);
+ 		rinfo->eht_ru_alloc = STA_STATS_GET(EHT_RU, rate);
+ 		break;
++	case STA_STATS_RATE_TYPE_S1G:
++		rinfo->flags = RATE_INFO_FLAGS_S1G_MCS;
++		rinfo->mcs = STA_STATS_GET(S1G_MCS, rate);
++		rinfo->nss = STA_STATS_GET(S1G_NSS, rate);
++		if (STA_STATS_GET(SGI, rate))
++			rinfo->flags |= RATE_INFO_FLAGS_SHORT_GI;
++		break;
+ 	}
+ }
+ 
+--- a/net/mac80211/sta_info.h
++++ b/net/mac80211/sta_info.h
+@@ -787,7 +787,6 @@ static inline void sta_info_pre_move_sta
+ 	WARN_ON_ONCE(ret);
+ }
+ 
+-
+ void ieee80211_assign_tid_tx(struct sta_info *sta, int tid,
+ 			     struct tid_ampdu_tx *tid_tx);
+ 
+@@ -964,6 +963,9 @@ enum sta_stats_type {
+ #define STA_STATS_FIELD_HE_DCM		GENMASK(22, 22)
+ #define STA_STATS_FIELD_EHT_RU		GENMASK(20, 17)
+ #define STA_STATS_FIELD_EHT_GI		GENMASK(22, 21)
++#define STA_STATS_FIELD_S1G_MCS		GENMASK( 3,  0)
++#define STA_STATS_FIELD_S1G_NSS		GENMASK( 7,  4)
++
+ 
+ #define STA_STATS_FIELD(_n, _v)		FIELD_PREP(STA_STATS_FIELD_ ## _n, _v)
+ #define STA_STATS_GET(_n, _v)		FIELD_GET(STA_STATS_FIELD_ ## _n, _v)
+@@ -1009,6 +1011,11 @@ static inline u32 sta_stats_encode_rate(
+ 		r |= STA_STATS_FIELD(EHT_GI, s->eht.gi);
+ 		r |= STA_STATS_FIELD(EHT_RU, s->eht.ru);
+ 		break;
++	case RX_ENC_S1G:
++		r |= STA_STATS_FIELD(TYPE, STA_STATS_RATE_TYPE_S1G);
++		r |= STA_STATS_FIELD(S1G_NSS, s->nss);
++		r |= STA_STATS_FIELD(S1G_MCS, s->rate_idx);
++		break;
+ 	default:
+ 		WARN_ON(1);
+ 		return STA_STATS_RATE_INVALID;

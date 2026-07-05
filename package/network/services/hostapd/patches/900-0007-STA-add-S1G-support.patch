@@ -1,0 +1,245 @@
+From fceca52669720cf94805393464c1059552836754 Mon Sep 17 00:00:00 2001
+From: Lachlan Hodges <lachlan.hodges@morsemicro.com>
+Date: Fri, 22 May 2026 11:47:45 +1000
+Subject: [PATCH 7/9] STA: add S1G support
+
+Introduce the ability to bring up an S1G STA. A sample config
+to connect to the equivalent AP config is as follows:
+
+```
+update_config=1
+country=US
+pmf=2
+
+network={
+        ssid="wifi_halow"
+        sae_password="12345678"
+        key_mgmt=SAE
+}
+```
+
+Signed-off-by: Lachlan Hodges <lachlan.hodges@morsemicro.com>
+---
+ src/drivers/driver.h            | 23 ++++++++++++++++++++++-
+ wpa_supplicant/Makefile         |  6 ++++++
+ wpa_supplicant/defconfig        |  3 +++
+ wpa_supplicant/events.c         |  5 +++--
+ wpa_supplicant/mesh.c           |  3 ++-
+ wpa_supplicant/sme.c            |  6 ++++++
+ wpa_supplicant/wpa_supplicant.c | 19 +++++++++++++++++--
+ 7 files changed, 59 insertions(+), 6 deletions(-)
+
+diff --git a/src/drivers/driver.h b/src/drivers/driver.h
+index 5c471ca2f..e92afcdfc 100644
+--- a/src/drivers/driver.h
++++ b/src/drivers/driver.h
+@@ -61,6 +61,9 @@ enum hostapd_chan_width_attr {
+ 	HOSTAPD_CHAN_WIDTH_80   = BIT(4),
+ 	HOSTAPD_CHAN_WIDTH_160  = BIT(5),
+ 	HOSTAPD_CHAN_WIDTH_320  = BIT(6),
++	HOSTAPD_CHAN_WIDTH_4    = BIT(9),
++	HOSTAPD_CHAN_WIDTH_8    = BIT(10),
++	HOSTAPD_CHAN_WIDTH_16   = BIT(11),
+ };
+ 
+ /* Filter gratuitous ARP */
+@@ -323,6 +326,11 @@ struct hostapd_hw_modes {
+ 	 * eht_capab - EHT (IEEE 802.11be) capabilities
+ 	 */
+ 	struct eht_capabilities eht_capab[IEEE80211_MODE_NUM];
++
++	/**
++	 * s1g_capab - S1G (IEEE 802.11ah) capabilities
++	 */
++	struct ieee80211_s1g_capabilities s1g_capab;
+ };
+ 
+ 
+@@ -876,6 +884,11 @@ struct hostapd_freq_params {
+ 	 */
+ 	int he_enabled;
+ 
++	/**
++	 * s1g_enabled - Whether S1G is enabled
++	 */
++	int s1g_enabled;
++
+ 	/**
+ 	 * center_freq1 - Segment 0 center frequency in MHz
+ 	 *
+@@ -898,7 +911,7 @@ struct hostapd_freq_params {
+ 	int center_freq2;
+ 
+ 	/**
+-	 * bandwidth - Channel bandwidth in MHz (20, 40, 80, 160)
++	 * bandwidth - Channel bandwidth in MHz (1, 2, 4, 8, 16, 20, 40, 80, 160)
+ 	 */
+ 	int bandwidth;
+ 
+@@ -922,6 +935,13 @@ struct hostapd_freq_params {
+ 	 * link_id: If >=0 indicates the link of the AP MLD to configure
+ 	 */
+ 	int link_id;
++
++	/**
++	 * s1g_primary_2mhz: Determines if the S1G channel is operating as a 2MHz primary.
++	 *
++	 * S1G primary channels can either be 1MHz or 2MHz.
++	 */
++	bool s1g_primary_2mhz;
+ };
+ 
+ /**
+@@ -2606,6 +2626,7 @@ struct hostapd_sta_add_params {
+ 	const struct ieee80211_he_6ghz_band_cap *he_6ghz_capab;
+ 	const struct ieee80211_eht_capabilities *eht_capab;
+ 	size_t eht_capab_len;
++	const struct ieee80211_s1g_capabilities *s1g_capab;
+ 	u32 flags; /* bitmask of WPA_STA_* flags */
+ 	u32 flags_mask; /* unset bits in flags */
+ #ifdef CONFIG_MESH
+diff --git a/wpa_supplicant/Makefile b/wpa_supplicant/Makefile
+index c40e8d70d..e51e2d6ad 100644
+--- a/wpa_supplicant/Makefile
++++ b/wpa_supplicant/Makefile
+@@ -1047,6 +1047,9 @@ endif
+ ifdef CONFIG_IEEE80211BE
+ OBJS += ../src/ap/ieee802_11_eht.o
+ endif
++ifdef CONFIG_IEEE80211AH
++OBJS += ../src/ap/ieee802_11_s1g.o
++endif
+ ifdef CONFIG_WNM_AP
+ CFLAGS += -DCONFIG_WNM_AP
+ OBJS += ../src/ap/wnm_ap.o
+@@ -1085,6 +1088,9 @@ endif
+ ifdef CONFIG_IEEE80211AX
+ CFLAGS += -DCONFIG_IEEE80211AX
+ endif
++ifdef CONFIG_IEEE80211AH
++CFLAGS += -DCONFIG_IEEE80211AH
++endif
+ 
+ ifdef NEED_AP_MLME
+ OBJS += ../src/ap/wmm.o
+diff --git a/wpa_supplicant/defconfig b/wpa_supplicant/defconfig
+index ace6c5530..7c89c2f7f 100644
+--- a/wpa_supplicant/defconfig
++++ b/wpa_supplicant/defconfig
+@@ -688,3 +688,6 @@ CONFIG_DPP2=y
+ 
+ # Wi-Fi Aware unsynchronized service discovery (NAN USD)
+ #CONFIG_NAN_USD=y
++
++# IEEE 802.11ah (S1G) support
++#CONFIG_IEEE80211AH=y
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index a3ffcbe4d..c2862d032 100644
+--- a/wpa_supplicant/events.c
++++ b/wpa_supplicant/events.c
+@@ -1448,9 +1448,10 @@ static bool wpa_scan_res_ok(struct wpa_supplicant *wpa_s, struct wpa_ssid *ssid,
+ #ifdef CONFIG_SAE
+ 	/* When using SAE Password Identifier and when operationg on the 6 GHz
+ 	 * band, only H2E is allowed. */
+-	if ((wpa_s->conf->sae_pwe == SAE_PWE_HASH_TO_ELEMENT ||
++	if ((is_s1ghz_freq(bss->freq) ||
++	     ((wpa_s->conf->sae_pwe == SAE_PWE_HASH_TO_ELEMENT ||
+ 	     is_6ghz_freq(bss->freq) || ssid->sae_password_id) &&
+-	    wpa_s->conf->sae_pwe != SAE_PWE_FORCE_HUNT_AND_PECK &&
++	    wpa_s->conf->sae_pwe != SAE_PWE_FORCE_HUNT_AND_PECK)) &&
+ 	    wpa_key_mgmt_sae(ssid->key_mgmt) &&
+ 	    !(rsnxe_capa & BIT(WLAN_RSNX_CAPAB_SAE_H2E))) {
+ 		if (debug_print)
+diff --git a/wpa_supplicant/mesh.c b/wpa_supplicant/mesh.c
+index c5ae809e9..6696f8c30 100644
+--- a/wpa_supplicant/mesh.c
++++ b/wpa_supplicant/mesh.c
+@@ -226,12 +226,13 @@ static int wpas_mesh_update_freq_params(struct wpa_supplicant *wpa_s)
+ 		    ifmsh->conf->ieee80211ac,
+ 		    ifmsh->conf->ieee80211ax,
+ 		    ifmsh->conf->ieee80211be,
++		    0, /* No S1G mesh support */
+ 		    ifmsh->conf->secondary_channel,
+ 		    hostapd_get_oper_chwidth(ifmsh->conf),
+ 		    hostapd_get_oper_centr_freq_seg0_idx(ifmsh->conf),
+ 		    hostapd_get_oper_centr_freq_seg1_idx(ifmsh->conf),
+ 		    ifmsh->conf->vht_capab,
+-		    he_capab, NULL, 0)) {
++		    he_capab, NULL, 0, 0, false)) {
+ 		wpa_printf(MSG_ERROR, "Error updating mesh frequency params");
+ 		wpa_supplicant_mesh_deinit(wpa_s, true);
+ 		return -1;
+diff --git a/wpa_supplicant/sme.c b/wpa_supplicant/sme.c
+index 2130ea25b..eed85c872 100644
+--- a/wpa_supplicant/sme.c
++++ b/wpa_supplicant/sme.c
+@@ -207,6 +207,12 @@ static struct wpabuf * sme_auth_build_sae_commit(struct wpa_supplicant *wpa_s,
+ 	if (bss && is_6ghz_freq(bss->freq) &&
+ 	    wpa_s->conf->sae_pwe != SAE_PWE_FORCE_HUNT_AND_PECK)
+ 		use_pt = 1;
++	if (bss && is_s1ghz_freq(bss->freq) &&
++	    wpa_s->conf->sae_pwe != SAE_PWE_HASH_TO_ELEMENT) {
++		wpa_dbg(wpa_s, MSG_DEBUG,
++			"SAE: Force H2E mode for S1G BSS");
++		wpa_s->conf->sae_pwe = SAE_PWE_HASH_TO_ELEMENT;
++	}
+ #ifdef CONFIG_SAE_PK
+ 	if ((rsnxe_capa & BIT(WLAN_RSNX_CAPAB_SAE_PK)) &&
+ 	    ssid->sae_pk != SAE_PK_MODE_DISABLED &&
+diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
+index ec7daea92..8a41948ad 100644
+--- a/wpa_supplicant/wpa_supplicant.c
++++ b/wpa_supplicant/wpa_supplicant.c
+@@ -2068,6 +2068,12 @@ int wpa_supplicant_set_suites(struct wpa_supplicant *wpa_s,
+ 			"RSN: Enable SAE hash-to-element mode for 6 GHz BSS");
+ 		sae_pwe = SAE_PWE_BOTH;
+ 	}
++	if (bss && is_s1ghz_freq(bss->freq) &&
++	    sae_pwe != SAE_PWE_HASH_TO_ELEMENT) {
++		wpa_dbg(wpa_s, MSG_DEBUG,
++			"RSN: hunt-and-peck not permitted with an S1G BSS");
++		sae_pwe = SAE_PWE_HASH_TO_ELEMENT;
++	}
+ 	wpa_sm_set_param(wpa_s->wpa, WPA_PARAM_SAE_PWE, sae_pwe);
+ #ifdef CONFIG_SAE_PK
+ 	wpa_sm_set_param(wpa_s->wpa, WPA_PARAM_SAE_PK,
+@@ -2084,6 +2090,12 @@ int wpa_supplicant_set_suites(struct wpa_supplicant *wpa_s,
+ 		wpa_sm_set_param(wpa_s->wpa, WPA_PARAM_MFP,
+ 				 MGMT_FRAME_PROTECTION_REQUIRED);
+ 	}
++	if (bss && is_s1ghz_freq(bss->freq) &&
++	    wpas_get_ssid_pmf(wpa_s, ssid) != MGMT_FRAME_PROTECTION_REQUIRED) {
++		wpa_dbg(wpa_s, MSG_DEBUG, "RSN: Force MFPR=1 on S1GHz");
++		wpa_sm_set_param(wpa_s->wpa, WPA_PARAM_MFP,
++				 MGMT_FRAME_PROTECTION_REQUIRED);
++	}
+ #ifdef CONFIG_TESTING_OPTIONS
+ 	wpa_sm_set_param(wpa_s->wpa, WPA_PARAM_FT_RSNXE_USED,
+ 			 wpa_s->ft_rsnxe_used);
+@@ -3209,11 +3221,11 @@ skip_80mhz:
+ 				    freq->channel, ssid->enable_edmg,
+ 				    ssid->edmg_channel, freq->ht_enabled,
+ 				    freq->vht_enabled, freq->he_enabled,
+-				    freq->eht_enabled,
++				    freq->eht_enabled, 0, /* No S1G mesh */
+ 				    freq->sec_channel_offset,
+ 				    chwidth, seg0, seg1, vht_caps,
+ 				    &mode->he_capab[ieee80211_mode],
+-				    &mode->eht_capab[ieee80211_mode], 0) != 0)
++				    &mode->eht_capab[ieee80211_mode], 0, 0, false) != 0)
+ 		return false;
+ 
+ 	*freq = vht_freq;
+@@ -4665,6 +4677,9 @@ static void wpas_start_assoc_cb(struct wpa_radio_work *work, int deinit)
+ 
+ #ifdef CONFIG_SAE
+ 	params.sae_pwe = wpa_s->conf->sae_pwe;
++	if (bss && is_s1ghz_freq(bss->freq) &&
++	    params.sae_pwe != SAE_PWE_HASH_TO_ELEMENT)
++		params.sae_pwe = SAE_PWE_HASH_TO_ELEMENT;
+ #endif /* CONFIG_SAE */
+ 
+ 	ret = wpa_drv_associate(wpa_s, &params);
+-- 
+2.43.0
+

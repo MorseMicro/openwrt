@@ -775,7 +775,7 @@ hostapd_switch_chan(struct ubus_context *ctx, struct ubus_object *obj,
 	SET_CSA_SETTING(CSA_HE, freq_params.he_enabled, bool);
 	SET_CSA_SETTING(CSA_BLOCK_TX, block_tx, bool);
 
-	css.freq_params.channel = hostapd_hw_get_channel(hapd, css.freq_params.freq);
+	css.freq_params.channel = hostapd_hw_get_channel(hapd, css.freq_params.freq, 0);
 	if (!css.freq_params.channel)
 		return UBUS_STATUS_NOT_SUPPORTED;
 
@@ -792,13 +792,14 @@ hostapd_switch_chan(struct ubus_context *ctx, struct ubus_object *obj,
 	}
 
 	hostapd_set_freq_params(&css.freq_params, iconf->hw_mode,
-				css.freq_params.freq,
+				css.freq_params.freq, 0,
 				css.freq_params.channel, iconf->enable_edmg,
 				iconf->edmg_channel,
 				css.freq_params.ht_enabled,
 				css.freq_params.vht_enabled,
 				css.freq_params.he_enabled,
 				css.freq_params.eht_enabled,
+				0, /* No S1G CSA support */
 				css.freq_params.sec_channel_offset,
 				chwidth, seg0, seg1,
 				iconf->vht_capab,
@@ -806,7 +807,8 @@ hostapd_switch_chan(struct ubus_context *ctx, struct ubus_object *obj,
 				NULL,
 				mode ? &mode->eht_capab[IEEE80211_MODE_AP] :
 				NULL,
-				hostapd_get_punct_bitmap(hapd));
+				hostapd_get_punct_bitmap(hapd),
+				0, false);
 
 	for (i = 0; i < hapd->iface->num_bss; i++) {
 		struct hostapd_data *bss = hapd->iface->bss[i];

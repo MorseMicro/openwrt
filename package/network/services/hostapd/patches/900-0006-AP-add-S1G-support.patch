@@ -1,40 +1,72 @@
-From 197c5d2dd1c3e85db25e749a318c154ab829c4f8 Mon Sep 17 00:00:00 2001
+From a910673a962e19a39e46accfa7e3327df44026df Mon Sep 17 00:00:00 2001
 From: Lachlan Hodges <lachlan.hodges@morsemicro.com>
-Date: Mon, 27 Oct 2025 14:43:38 +1100
-Subject: [PATCH 6/8] AP: add S1G support
+Date: Fri, 22 May 2026 11:47:22 +1000
+Subject: [PATCH 6/9] AP: add S1G support
 
+Introduce the ability to bring up an S1G AP. Currently only US 2024
+channelisation is supported. A sample config is as follows:
+
+```
+interface=wlan0
+country_code=US
+driver=nl80211
+ssid=wifi_halow
+
+channel=43
+ieee80211ah=1
+op_class=71
+beacon_int=100
+dtim_period=10
+s1g_oper_centr_freq_idx=44
+s1g_primary_2mhz=1
+
+hw_mode=ah
+wpa=2
+wpa_key_mgmt=SAE
+rsn_pairwise=CCMP
+sae_password=12345678
+ieee80211w=2
+```
+
+Where we are configuring an operating channel of 44, primary 1MHz
+channel of 43, whilst utilising a 2MHz primary. There is no need to
+include sae_pwe=1 as H2E will automatically be enabled for S1G.
+ieee80211w=2 is required, and will error if not set correctly during
+config validation.
+
+Signed-off-by: Lachlan Hodges <lachlan.hodges@morsemicro.com>
 ---
  hostapd/Makefile                |   5 +
+ hostapd/config_file.c           |  10 ++
  src/ap/Makefile                 |   1 +
- src/ap/ap_config.h              |  24 +++++
- src/ap/ap_drv_ops.c             |  16 +++-
+ src/ap/ap_config.c              |  34 ++++++
+ src/ap/ap_config.h              |  23 ++++
+ src/ap/ap_drv_ops.c             |  18 ++-
  src/ap/ap_drv_ops.h             |   4 +-
- src/ap/beacon.c                 |  94 +++++++++++++++++--
- src/ap/ctrl_iface_ap.c          |   2 +
- src/ap/dfs.c                    |   6 +-
- src/ap/hostapd.c                |   7 +-
- src/ap/hw_features.c            |  12 +++
- src/ap/ieee802_11.c             |  55 +++++++++--
- src/ap/ieee802_11.h             |  13 +++
- src/ap/ieee802_11_s1g.c         | 158 ++++++++++++++++++++++++++++++++
+ src/ap/apup.c                   |   9 +-
+ src/ap/beacon.c                 |  93 ++++++++++++++-
+ src/ap/ctrl_iface_ap.c          |   3 +-
+ src/ap/dfs.c                    |   8 +-
+ src/ap/hostapd.c                |  13 ++-
+ src/ap/hw_features.c            |  32 +++++-
+ src/ap/ieee802_11.c             |  54 +++++++--
+ src/ap/ieee802_11.h             |  10 ++
+ src/ap/ieee802_11_s1g.c         | 196 ++++++++++++++++++++++++++++++++
  src/ap/ieee802_11_shared.c      |  14 +++
- src/ap/sta_info.c               |   3 +-
+ src/ap/sta_info.c               |   5 +-
  src/ap/sta_info.h               |   4 +-
- src/common/defs.h               |   5 +
- src/common/hw_features_common.c |  49 +++++++++-
+ src/common/defs.h               |   6 +
+ src/common/hw_features_common.c |  49 +++++++-
  src/common/hw_features_common.h |   6 +-
- src/common/ieee802_11_common.c  |  39 +++++++-
- src/common/ieee802_11_common.h  |   4 +-
- src/common/ieee802_11_defs.h    |  44 +++++++++
- src/drivers/driver.h            |  23 ++++-
+ src/common/ieee802_11_common.c  |  55 ++++++++-
+ src/common/ieee802_11_common.h  |   6 +-
+ src/common/ieee802_11_defs.h    |  55 +++++++++
  wlantest/bss.c                  |   2 +-
- wpa_supplicant/Makefile         |   6 ++
- wpa_supplicant/defconfig        |   3 +
- wpa_supplicant/mesh.c           |   3 +-
- wpa_supplicant/wpa_supplicant.c |  16 +++-
- 28 files changed, 580 insertions(+), 38 deletions(-)
+ 26 files changed, 671 insertions(+), 44 deletions(-)
  create mode 100644 src/ap/ieee802_11_s1g.c
 
+diff --git a/hostapd/Makefile b/hostapd/Makefile
+index e8a0dbaad..7372a02e4 100644
 --- a/hostapd/Makefile
 +++ b/hostapd/Makefile
 @@ -381,6 +381,11 @@ CFLAGS += -DCONFIG_IEEE80211AX
@@ -49,6 +81,36 @@ Subject: [PATCH 6/8] AP: add S1G support
  ifdef CONFIG_MBO
  CFLAGS += -DCONFIG_MBO
  OBJS += ../src/ap/mbo_ap.o
+diff --git a/hostapd/config_file.c b/hostapd/config_file.c
+index 176d7d957..1c37d538b 100644
+--- a/hostapd/config_file.c
++++ b/hostapd/config_file.c
+@@ -3414,6 +3414,8 @@ static int hostapd_config_fill(struct hostapd_config *conf,
+ 			conf->hw_mode = HOSTAPD_MODE_IEEE80211G;
+ 		else if (os_strcmp(pos, "ad") == 0)
+ 			conf->hw_mode = HOSTAPD_MODE_IEEE80211AD;
++		else if (os_strcmp(pos, "ah") == 0)
++			conf->hw_mode = HOSTAPD_MODE_IEEE80211AH;
+ 		else if (os_strcmp(pos, "any") == 0)
+ 			conf->hw_mode = HOSTAPD_MODE_IEEE80211ANY;
+ 		else {
+@@ -3991,6 +3993,14 @@ static int hostapd_config_fill(struct hostapd_config *conf,
+ 		}
+ 		conf->mbssid = mbssid;
+ #endif /* CONFIG_IEEE80211AX */
++#ifdef CONFIG_IEEE80211AH
++	} else if (os_strcmp(buf, "ieee80211ah") == 0) {
++		conf->ieee80211ah = atoi(pos);
++	} else if (os_strcmp(buf, "s1g_oper_centr_freq_idx") == 0) {
++		conf->s1g_oper_centr_freq_idx = atoi(pos);
++	} else if (os_strcmp(buf, "s1g_primary_2mhz") == 0) {
++		conf->s1g_primary_2mhz = atoi(pos);
++#endif /* CONFIG_IEEE80211AH */
+ 	} else if (os_strcmp(buf, "max_listen_interval") == 0) {
+ 		bss->max_listen_interval = atoi(pos);
+ 	} else if (os_strcmp(buf, "disable_pmksa_caching") == 0) {
+diff --git a/src/ap/Makefile b/src/ap/Makefile
+index a1e9b7c44..51ee30600 100644
 --- a/src/ap/Makefile
 +++ b/src/ap/Makefile
 @@ -35,6 +35,7 @@ LIB_OBJS= \
@@ -59,6 +121,67 @@ Subject: [PATCH 6/8] AP: add S1G support
  	ieee802_1x.o \
  	neighbor_db.o \
  	ndisc_snoop.o \
+diff --git a/src/ap/ap_config.c b/src/ap/ap_config.c
+index 160809a27..769452ad8 100644
+--- a/src/ap/ap_config.c
++++ b/src/ap/ap_config.c
+@@ -1220,6 +1220,26 @@ static bool hostapd_sae_pk_password_without_pk(struct hostapd_bss_config *bss)
+ }
+ #endif /* CONFIG_SAE_PK */
+ 
++#ifdef CONFIG_IEEE80211AH
++bool hostapd_config_check_bss_s1g(struct hostapd_bss_config *bss)
++{
++	if (bss->ieee80211w != MGMT_FRAME_PROTECTION_REQUIRED) {
++		wpa_printf(MSG_ERROR,
++			   "Management frame protection is required in S1GHz (ieee80211w=2)");
++		return false;
++	}
++
++#ifdef CONFIG_SAE
++	if (wpa_key_mgmt_sae(bss->wpa_key_mgmt) &&
++	    bss->sae_pwe != SAE_PWE_HASH_TO_ELEMENT) {
++		wpa_printf(MSG_INFO, "SAE: Forcing SAE H2E on S1GHz");
++		bss->sae_pwe = SAE_PWE_HASH_TO_ELEMENT;
++	}
++#endif /* CONFIG_SAE */
++
++	return true;
++}
++#endif /* CONFIG_IEEE80211AH */
+ 
+ static bool hostapd_config_check_bss_6g(struct hostapd_bss_config *bss)
+ {
+@@ -1277,6 +1297,12 @@ static int hostapd_config_check_bss(struct hostapd_bss_config *bss,
+ 	    !hostapd_config_check_bss_6g(bss))
+ 		return -1;
+ 
++#ifdef CONFIG_IEEE80211AH
++	if (full_config && conf->hw_mode ==  HOSTAPD_MODE_IEEE80211AH &&
++	    !hostapd_config_check_bss_s1g(bss))
++		return -1;
++#endif /* CONFIG_IEEE80211AH */
++
+ 	if (full_config && bss->ieee802_1x && !bss->eap_server &&
+ 	    !bss->radius->auth_servers) {
+ 		wpa_printf(MSG_ERROR, "Invalid IEEE 802.1X configuration (no "
+@@ -1612,6 +1638,14 @@ int hostapd_config_check(struct hostapd_config *conf, int full_config)
+ 		return -1;
+ 	}
+ 
++#ifdef CONFIG_IEEE80211AH
++	if (full_config && conf->hw_mode == HOSTAPD_MODE_IEEE80211AH &&
++	    !is_supported_s1g_op_class(conf->op_class)) {
++		wpa_printf(MSG_ERROR, "Unsupported global op_class for S1G operation");
++		return -1;
++	}
++#endif /* CONFIG_IEEE80211AH */
++
+ 	for (i = 0; i < conf->num_bss; i++) {
+ 		if (hostapd_config_check_bss(conf->bss[i], conf, full_config))
+ 			return -1;
+diff --git a/src/ap/ap_config.h b/src/ap/ap_config.h
+index a8df0f4bc..3be64010f 100644
 --- a/src/ap/ap_config.h
 +++ b/src/ap/ap_config.h
 @@ -1089,6 +1089,7 @@ struct hostapd_config {
@@ -69,7 +192,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  	u8 acs;
  	struct wpa_freq_range_list acs_ch_list;
  	struct wpa_freq_range_list acs_freq_list;
-@@ -1236,6 +1237,13 @@ struct hostapd_config {
+@@ -1236,6 +1237,12 @@ struct hostapd_config {
  	bool require_he;
  #endif /* CONFIG_IEEE80211AX */
  
@@ -77,13 +200,12 @@ Subject: [PATCH 6/8] AP: add S1G support
 +#ifdef CONFIG_IEEE80211AH
 +	int s1g_oper_centr_freq_idx;
 +	enum oper_chan_width s1g_oper_chwidth;
-+	int s1g_pri_loc;
 +#endif /* CONFIG_IEEE80211AH */
 +
  	/* VHT enable/disable config from CHAN_SWITCH */
  #define CH_SWITCH_VHT_ENABLED BIT(0)
  #define CH_SWITCH_VHT_DISABLED BIT(1)
-@@ -1292,6 +1300,10 @@ struct hostapd_config {
+@@ -1292,6 +1299,10 @@ struct hostapd_config {
  static inline enum oper_chan_width
  hostapd_get_oper_chwidth(struct hostapd_config *conf)
  {
@@ -94,7 +216,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  #ifdef CONFIG_IEEE80211BE
  	if (conf->ieee80211be)
  		return conf->eht_oper_chwidth;
-@@ -1307,6 +1319,10 @@ static inline void
+@@ -1307,6 +1318,10 @@ static inline void
  hostapd_set_oper_chwidth(struct hostapd_config *conf,
  			 enum oper_chan_width oper_chwidth)
  {
@@ -105,7 +227,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  #ifdef CONFIG_IEEE80211BE
  	if (conf->ieee80211be)
  		conf->eht_oper_chwidth = oper_chwidth;
-@@ -1323,6 +1339,10 @@ hostapd_set_oper_chwidth(struct hostapd_
+@@ -1323,6 +1338,10 @@ hostapd_set_oper_chwidth(struct hostapd_config *conf,
  static inline u8
  hostapd_get_oper_centr_freq_seg0_idx(struct hostapd_config *conf)
  {
@@ -116,7 +238,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  #ifdef CONFIG_IEEE80211BE
  	if (conf->ieee80211be)
  		return conf->eht_oper_centr_freq_seg0_idx;
-@@ -1338,6 +1358,10 @@ static inline void
+@@ -1338,6 +1357,10 @@ static inline void
  hostapd_set_oper_centr_freq_seg0_idx(struct hostapd_config *conf,
  				     u8 oper_centr_freq_seg0_idx)
  {
@@ -127,9 +249,11 @@ Subject: [PATCH 6/8] AP: add S1G support
  #ifdef CONFIG_IEEE80211BE
  	if (conf->ieee80211be)
  		conf->eht_oper_centr_freq_seg0_idx = oper_centr_freq_seg0_idx;
+diff --git a/src/ap/ap_drv_ops.c b/src/ap/ap_drv_ops.c
+index f7f5eec71..3ac2d1fcb 100644
 --- a/src/ap/ap_drv_ops.c
 +++ b/src/ap/ap_drv_ops.c
-@@ -495,6 +495,7 @@ int hostapd_sta_add(struct hostapd_data
+@@ -495,6 +495,7 @@ int hostapd_sta_add(struct hostapd_data *hapd,
  		    const struct ieee80211_eht_capabilities *eht_capab,
  		    size_t eht_capab_len,
  		    const struct ieee80211_he_6ghz_band_cap *he_6ghz_capab,
@@ -137,7 +261,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  		    u32 flags, u8 qosinfo, u8 vht_opmode, int supp_p2p_ps,
  		    int set, const u8 *link_addr, bool mld_link_sta)
  {
-@@ -519,6 +520,7 @@ int hostapd_sta_add(struct hostapd_data
+@@ -519,6 +520,7 @@ int hostapd_sta_add(struct hostapd_data *hapd,
  	params.eht_capab = eht_capab;
  	params.eht_capab_len = eht_capab_len;
  	params.he_6ghz_capab = he_6ghz_capab;
@@ -145,7 +269,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  	params.vht_opmode_enabled = !!(flags & WLAN_STA_VHT_OPMODE_ENABLED);
  	params.vht_opmode = vht_opmode;
  	params.flags = hostapd_sta_flags_to_drv(flags);
-@@ -670,6 +672,7 @@ int hostapd_set_freq(struct hostapd_data
+@@ -670,6 +672,7 @@ int hostapd_set_freq(struct hostapd_data *hapd, enum hostapd_hw_mode mode,
  		     int edmg, u8 edmg_channel,
  		     int ht_enabled, int vht_enabled,
  		     int he_enabled, bool eht_enabled,
@@ -153,7 +277,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  		     int sec_channel_offset, int oper_chwidth,
  		     int center_segment0, int center_segment1)
  {
-@@ -679,7 +682,8 @@ int hostapd_set_freq(struct hostapd_data
+@@ -679,7 +682,8 @@ int hostapd_set_freq(struct hostapd_data *hapd, enum hostapd_hw_mode mode,
  	if (hostapd_set_freq_params(&data, mode, freq, freq_offset,
  				    channel, edmg,
  				    edmg_channel, ht_enabled,
@@ -163,7 +287,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  				    sec_channel_offset, oper_chwidth,
  				    center_segment0, center_segment1,
  				    cmode ? cmode->vht_capab : 0,
-@@ -687,7 +691,9 @@ int hostapd_set_freq(struct hostapd_data
+@@ -687,7 +691,9 @@ int hostapd_set_freq(struct hostapd_data *hapd, enum hostapd_hw_mode mode,
  				    &cmode->he_capab[IEEE80211_MODE_AP] : NULL,
  				    cmode ?
  				    &cmode->eht_capab[IEEE80211_MODE_AP] :
@@ -174,7 +298,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  		return -1;
  
  	if (hapd->driver == NULL)
-@@ -1047,14 +1053,16 @@ int hostapd_start_dfs_cac(struct hostapd
+@@ -1047,14 +1053,16 @@ int hostapd_start_dfs_cac(struct hostapd_iface *iface,
  
  	if (hostapd_set_freq_params(&data, mode, freq, 0, channel, 0, 0,
  				    ht_enabled,
@@ -193,9 +317,20 @@ Subject: [PATCH 6/8] AP: add S1G support
  		wpa_printf(MSG_ERROR, "Can't set freq params");
  		return -1;
  	}
+@@ -1196,6 +1204,8 @@ int hostapd_drv_do_acs(struct hostapd_data *hapd)
+ 
+ 	for (i = 0; i < hapd->iface->num_hw_features; i++) {
+ 		mode = &hapd->iface->hw_features[i];
++		if (mode->mode == HOSTAPD_MODE_IEEE80211AH)
++			continue;
+ 		if (selected_mode != HOSTAPD_MODE_IEEE80211ANY &&
+ 		    selected_mode != mode->mode)
+ 			continue;
+diff --git a/src/ap/ap_drv_ops.h b/src/ap/ap_drv_ops.h
+index c745fa58c..2ed837185 100644
 --- a/src/ap/ap_drv_ops.h
 +++ b/src/ap/ap_drv_ops.h
-@@ -51,6 +51,7 @@ int hostapd_sta_add(struct hostapd_data
+@@ -51,6 +51,7 @@ int hostapd_sta_add(struct hostapd_data *hapd,
  		    const struct ieee80211_eht_capabilities *eht_capab,
  		    size_t eht_capab_len,
  		    const struct ieee80211_he_6ghz_band_cap *he_6ghz_capab,
@@ -203,7 +338,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  		    u32 flags, u8 qosinfo, u8 vht_opmode, int supp_p2p_ps,
  		    int set, const u8 *link_addr, bool mld_link_sta);
  int hostapd_set_privacy(struct hostapd_data *hapd, int enabled);
-@@ -76,7 +77,8 @@ int hostapd_set_freq(struct hostapd_data
+@@ -76,7 +77,8 @@ int hostapd_set_freq(struct hostapd_data *hapd, enum hostapd_hw_mode mode,
  		     int freq, int freq_offset,
  		     int channel, int edmg, u8 edmg_channel,
  		     int ht_enabled, int vht_enabled, int he_enabled,
@@ -213,23 +348,59 @@ Subject: [PATCH 6/8] AP: add S1G support
  		     int center_segment0, int center_segment1);
  int hostapd_set_rts(struct hostapd_data *hapd, int rts);
  int hostapd_set_frag(struct hostapd_data *hapd, int frag);
+diff --git a/src/ap/apup.c b/src/ap/apup.c
+index f736ddc8e..68f8ec36a 100644
+--- a/src/ap/apup.c
++++ b/src/ap/apup.c
+@@ -64,7 +64,7 @@ void apup_process_beacon(struct hostapd_data *hapd,
+ 	/* First add the station without more information */
+ 	int aRet = hostapd_sta_add(
+ 	            hapd, mgmt->bssid, sta_ret->aid, 0,
+-	            NULL, 0, 0, NULL, NULL, NULL, 0, NULL, 0, NULL,
++	            NULL, 0, 0, NULL, NULL, NULL, 0, NULL, 0, NULL, NULL,
+ 	            sta_ret->flags, 0, 0, 0,
+ 	            0, // 0 add, 1 set
+ 	            mld_link_addr, mld_link_sta);
+@@ -108,6 +108,12 @@ void apup_process_beacon(struct hostapd_data *hapd,
+ 	                   elems->he_capabilities, elems->he_capabilities_len,
+ 	                   elems->eht_capabilities, elems->eht_capabilities_len);
+ #endif //def CONFIG_IEEE80211BE
++#ifdef CONFIG_IEEE80211AH
++	copy_sta_s1g_capab(hapd, sta_ret,
++	                   IEEE80211_MODE_AP, // TODO: Make sure is the right value
++	                   elems->s1g_capabilities);
++#endif //def CONFIG_IEEE80211AH
++
+ 
+ 	update_ht_state(hapd, sta_ret);
+ 
+@@ -136,6 +142,7 @@ void apup_process_beacon(struct hostapd_data *hapd,
+ 	            sta_ret->he_capab, sta_ret->he_capab_len,
+ 	            sta_ret->eht_capab, sta_ret->eht_capab_len,
+ 	            sta_ret->he_6ghz_capab,
++	            sta_ret->s1g_capab,
+ 	            sta_ret->flags,
+ 	            0, // u8 qosinfo
+ 	            sta_ret->vht_opmode,
+diff --git a/src/ap/beacon.c b/src/ap/beacon.c
+index 5cbeb84e1..1d95e5b5f 100644
 --- a/src/ap/beacon.c
 +++ b/src/ap/beacon.c
-@@ -784,6 +784,13 @@ static size_t hostapd_probe_resp_elems_l
+@@ -784,6 +784,13 @@ static size_t hostapd_probe_resp_elems_len(struct hostapd_data *hapd,
  	}
  #endif /* CONFIG_IEEE80211BE */
  
 +#ifdef CONFIG_IEEE80211AH
 +	if (hapd->iconf->ieee80211ah) {
 +	        buflen += 2 + sizeof(struct ieee80211_s1g_capabilities) +
-+	        	  2 + sizeof(struct ieee80211_s1g_operation);
++			  2 + sizeof(struct ieee80211_s1g_operation);
 +	}
 +#endif /* CONFIG_IEEE80211AH */
 +
  	buflen += hostapd_eid_mbssid_len(hapd, WLAN_FC_STYPE_PROBE_RESP, NULL,
  					 params->known_bss,
  					 params->known_bss_len, NULL);
-@@ -889,6 +896,13 @@ static u8 * hostapd_probe_resp_fill_elem
+@@ -889,6 +896,13 @@ static u8 * hostapd_probe_resp_fill_elems(struct hostapd_data *hapd,
  	}
  #endif /* CONFIG_IEEE80211AC */
  
@@ -243,20 +414,20 @@ Subject: [PATCH 6/8] AP: add S1G support
  #ifdef CONFIG_IEEE80211AX
  	if (hapd->iconf->ieee80211ax && !hapd->conf->disable_11ax &&
  	    is_6ghz_op_class(hapd->iconf->op_class))
-@@ -1460,7 +1474,11 @@ void handle_probe_req(struct hostapd_dat
+@@ -1460,7 +1474,11 @@ void handle_probe_req(struct hostapd_data *hapd,
  		return;
  	}
  
 -	if ((!elems.ssid || !elems.supp_rates)) {
 +	/*
-+	 * S1G does not support legacy rates, the equivalent information is
++	 * S1G does not support legacy rates. The equivalent information is
 +	 * advertised in the S1G Capabilities element.
 +	 */
 +	if ((!elems.ssid || (!elems.supp_rates && !elems.s1g_capabilities))) {
  		wpa_printf(MSG_DEBUG, "STA " MACSTR " sent probe request "
  			   "without SSID or supported rates element",
  			   MAC2STR(mgmt->sa));
-@@ -2162,6 +2180,9 @@ int ieee802_11_build_ap_params(struct ho
+@@ -2162,6 +2180,9 @@ int ieee802_11_build_ap_params(struct hostapd_data *hapd,
  			       struct wpa_driver_ap_params *params)
  {
  	struct ieee80211_mgmt *head = NULL;
@@ -266,12 +437,13 @@ Subject: [PATCH 6/8] AP: add S1G support
  	u8 *tail = NULL;
  	size_t head_len = 0, tail_len = 0;
  	u8 *resp = NULL;
-@@ -2225,6 +2246,13 @@ int ieee802_11_build_ap_params(struct ho
+@@ -2225,6 +2246,14 @@ int ieee802_11_build_ap_params(struct hostapd_data *hapd,
  	}
  #endif /* CONFIG_IEEE80211BE */
  
 +#ifdef CONFIG_IEEE80211AH
 +	if (hapd->iconf->ieee80211ah) {
++		/* +2 for element type + length respectively */
 +		tail_len += 2 + sizeof(struct ieee80211_s1g_operation) +
 +			    2 + sizeof(struct ieee80211_s1g_capabilities);
 +	}
@@ -280,7 +452,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  	if (hapd->iconf->mbssid == ENHANCED_MBSSID_ENABLED &&
  	    hapd == hostapd_mbssid_get_tx_bss(hapd))
  		tail_len += 5; /* Multiple BSSID Configuration element */
-@@ -2245,12 +2273,25 @@ int ieee802_11_build_ap_params(struct ho
+@@ -2245,12 +2274,25 @@ int ieee802_11_build_ap_params(struct hostapd_data *hapd,
  	}
  	tailend = tail + tail_len;
  
@@ -308,7 +480,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  	os_memcpy(head->bssid, hapd->own_addr, ETH_ALEN);
  	head->u.beacon.beacon_int =
  		host_to_le16(hapd->iconf->beacon_int);
-@@ -2258,7 +2299,30 @@ int ieee802_11_build_ap_params(struct ho
+@@ -2258,7 +2300,30 @@ int ieee802_11_build_ap_params(struct hostapd_data *hapd,
  	/* hardware or low-level driver will setup seq_ctrl and timestamp */
  	capab_info = hostapd_own_capab_info(hapd);
  	head->u.beacon.capab_info = host_to_le16(capab_info);
@@ -327,7 +499,7 @@ Subject: [PATCH 6/8] AP: add S1G support
 +	 * transmitted at a TBTT that is not a TSBTT (i.e a long beacon) shall
 +	 * contain the Beacon Compatibility element as the first element in a
 +	 * beacon. Therefore insert this at the head before the SSID element.
-+	 * other elements can be inserted in the tail as normal.
++	 * Other elements can be inserted in the tail as normal.
 +	 */
 +#ifdef CONFIG_IEEE80211AH
 +	if (hapd->iconf->ieee80211ah) {
@@ -339,22 +511,22 @@ Subject: [PATCH 6/8] AP: add S1G support
  
  	/* SSID */
  	*pos++ = WLAN_EID_SSID;
-@@ -2282,7 +2346,14 @@ int ieee802_11_build_ap_params(struct ho
+@@ -2282,7 +2347,14 @@ int ieee802_11_build_ap_params(struct hostapd_data *hapd,
  	/* DS Params */
  	pos = hostapd_eid_ds_params(hapd, pos);
  
-+	#ifdef CONFIG_IEEE80211AH
++#ifdef CONFIG_IEEE80211AH
 +	if (hapd->iconf->ieee80211ah)
 +		head_len = pos - (u8 *) ext_head;
 +	else
 +		head_len = pos - (u8 *) head;
-+	#else
++#else
  	head_len = pos - (u8 *) head;
-+	#endif /* CONFIG_IEEE80211AH */
++#endif /* CONFIG_IEEE80211AH */
  
  	tailpos = hostapd_eid_country(hapd, tailpos, tailend - tailpos);
  
-@@ -2514,7 +2585,14 @@ int ieee802_11_build_ap_params(struct ho
+@@ -2514,7 +2586,14 @@ int ieee802_11_build_ap_params(struct hostapd_data *hapd,
  	}
  #endif /* CONFIG_SAE */
  
@@ -369,7 +541,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  	params->head_len = head_len;
  	params->tail = tail;
  	params->tail_len = tail_len;
-@@ -2725,7 +2803,7 @@ static int __ieee802_11_set_beacon(struc
+@@ -2725,7 +2804,7 @@ static int __ieee802_11_set_beacon(struct hostapd_data *hapd)
  				    iconf->channel, iconf->enable_edmg,
  				    iconf->edmg_channel, iconf->ieee80211n,
  				    iconf->ieee80211ac, iconf->ieee80211ax,
@@ -378,7 +550,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  				    iconf->secondary_channel,
  				    hostapd_get_oper_chwidth(iconf),
  				    hostapd_get_oper_centr_freq_seg0_idx(iconf),
-@@ -2733,7 +2811,9 @@ static int __ieee802_11_set_beacon(struc
+@@ -2733,7 +2812,9 @@ static int __ieee802_11_set_beacon(struct hostapd_data *hapd)
  				    cmode->vht_capab,
  				    &cmode->he_capab[IEEE80211_MODE_AP],
  				    &cmode->eht_capab[IEEE80211_MODE_AP],
@@ -389,9 +561,28 @@ Subject: [PATCH 6/8] AP: add S1G support
  		freq.link_id = -1;
  #ifdef CONFIG_IEEE80211BE
  		if (hapd->conf->mld_ap)
+@@ -2745,6 +2826,8 @@ static int __ieee802_11_set_beacon(struct hostapd_data *hapd)
+ 	for (i = 0; i < hapd->iface->num_hw_features; i++) {
+ 		mode = &hapd->iface->hw_features[i];
+ 
++		if (mode->mode == HOSTAPD_MODE_IEEE80211AH)
++			continue;
+ 		if (iconf->hw_mode != HOSTAPD_MODE_IEEE80211ANY &&
+ 		    iconf->hw_mode != mode->mode)
+ 			continue;
+diff --git a/src/ap/ctrl_iface_ap.c b/src/ap/ctrl_iface_ap.c
+index 5f7d5fc01..a843980e2 100644
 --- a/src/ap/ctrl_iface_ap.c
 +++ b/src/ap/ctrl_iface_ap.c
-@@ -876,6 +876,7 @@ int hostapd_ctrl_iface_status(struct hos
+@@ -231,7 +231,6 @@ static const char * timeout_next_str(int val)
+ 	}
+ }
+ 
+-
+ static int hostapd_ctrl_iface_sta_mib(struct hostapd_data *hapd,
+ 				      struct sta_info *sta,
+ 				      char *buf, size_t buflen)
+@@ -876,6 +875,7 @@ int hostapd_ctrl_iface_status(struct hostapd_data *hapd, char *buf,
  			  "ieee80211ac=%d\n"
  			  "ieee80211ax=%d\n"
  			  "ieee80211be=%d\n"
@@ -399,7 +590,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  			  "beacon_int=%u\n"
  			  "dtim_period=%d\n",
  			  iface->conf->channel,
-@@ -890,6 +891,7 @@ int hostapd_ctrl_iface_status(struct hos
+@@ -890,6 +890,7 @@ int hostapd_ctrl_iface_status(struct hostapd_data *hapd, char *buf,
  			  !hapd->conf->disable_11ax,
  			  iface->conf->ieee80211be &&
  			  !hapd->conf->disable_11be,
@@ -407,9 +598,11 @@ Subject: [PATCH 6/8] AP: add S1G support
  			  iface->conf->beacon_int,
  			  hapd->conf->dtim_period);
  	if (os_snprintf_error(buflen - len, ret))
+diff --git a/src/ap/dfs.c b/src/ap/dfs.c
+index cab07c4d1..bb32f68c3 100644
 --- a/src/ap/dfs.c
 +++ b/src/ap/dfs.c
-@@ -856,7 +856,7 @@ int hostapd_handle_dfs(struct hostapd_if
+@@ -856,7 +856,7 @@ int hostapd_handle_dfs(struct hostapd_iface *iface)
  	int res, n_chans, n_chans1, start_chan_idx, start_chan_idx1;
  	int skip_radar = 0;
  
@@ -418,7 +611,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  		return 1;
  
  	if (!iface->current_mode) {
-@@ -1030,6 +1030,7 @@ static int hostapd_dfs_request_channel_s
+@@ -1030,6 +1030,7 @@ static int hostapd_dfs_request_channel_switch(struct hostapd_iface *iface,
  				      iface->conf->ieee80211ac,
  				      iface->conf->ieee80211ax,
  				      iface->conf->ieee80211be,
@@ -426,7 +619,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  				      secondary_channel,
  				      new_vht_oper_chwidth,
  				      oper_centr_freq_seg0_idx,
-@@ -1037,7 +1038,8 @@ static int hostapd_dfs_request_channel_s
+@@ -1037,7 +1038,8 @@ static int hostapd_dfs_request_channel_switch(struct hostapd_iface *iface,
  				      cmode->vht_capab,
  				      &cmode->he_capab[ieee80211_mode],
  				      &cmode->eht_capab[ieee80211_mode],
@@ -436,9 +629,47 @@ Subject: [PATCH 6/8] AP: add S1G support
  
  	if (err) {
  		wpa_printf(MSG_ERROR,
+@@ -1542,6 +1544,7 @@ int hostapd_is_dfs_required(struct hostapd_iface *iface)
+ 	if ((!(iface->drv_flags & WPA_DRIVER_FLAGS_DFS_OFFLOAD) &&
+ 	     !iface->conf->ieee80211h) ||
+ 	    !iface->current_mode ||
++	    iface->current_mode->mode == HOSTAPD_MODE_IEEE80211AH ||
+ 	    iface->current_mode->mode != HOSTAPD_MODE_IEEE80211A)
+ 		return 0;
+ 
+@@ -1649,6 +1652,7 @@ int hostapd_is_dfs_overlap(struct hostapd_iface *iface, enum chan_width width,
+ 	int i;
+ 
+ 	if (!iface->conf->ieee80211h || !mode ||
++	    mode->mode == HOSTAPD_MODE_IEEE80211AH ||
+ 	    mode->mode != HOSTAPD_MODE_IEEE80211A)
+ 		return 0;
+ 
+diff --git a/src/ap/hostapd.c b/src/ap/hostapd.c
+index f6d32e5f7..9dbdf27d7 100644
 --- a/src/ap/hostapd.c
 +++ b/src/ap/hostapd.c
-@@ -2628,6 +2628,7 @@ static int hostapd_setup_interface_compl
+@@ -137,7 +137,8 @@ static void hostapd_reload_bss(struct hostapd_data *hapd)
+ 
+ 	if (hapd->conf->wmm_enabled < 0)
+ 		hapd->conf->wmm_enabled = hapd->iconf->ieee80211n |
+-			hapd->iconf->ieee80211ax;
++					  hapd->iconf->ieee80211ax |
++					  hapd->iconf->ieee80211ah;
+ 
+ #ifndef CONFIG_NO_RADIUS
+ 	radius_client_reconfig(hapd->radius, hapd->conf->radius);
+@@ -1542,7 +1543,8 @@ setup_mld:
+ 
+ 	if (conf->wmm_enabled < 0)
+ 		conf->wmm_enabled = hapd->iconf->ieee80211n |
+-			hapd->iconf->ieee80211ax;
++				    hapd->iconf->ieee80211ax |
++				    hapd->iconf->ieee80211ah;
+ 
+ #ifdef CONFIG_IEEE80211R_AP
+ 	if (is_zero_ether_addr(conf->r1_key_holder))
+@@ -2628,6 +2630,7 @@ static int hostapd_setup_interface_complete_sync(struct hostapd_iface *iface,
  				     hapd->iconf->ieee80211ac,
  				     hapd->iconf->ieee80211ax,
  				     hapd->iconf->ieee80211be,
@@ -446,7 +677,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  				     hapd->iconf->secondary_channel,
  				     hostapd_get_oper_chwidth(hapd->iconf),
  				     hostapd_get_oper_centr_freq_seg0_idx(
-@@ -4365,7 +4366,8 @@ static int hostapd_change_config_freq(st
+@@ -4370,7 +4373,8 @@ static int hostapd_change_config_freq(struct hostapd_data *hapd,
  				    conf->channel, conf->enable_edmg,
  				    conf->edmg_channel, conf->ieee80211n,
  				    conf->ieee80211ac, conf->ieee80211ax,
@@ -456,7 +687,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  				    hostapd_get_oper_chwidth(conf),
  				    hostapd_get_oper_centr_freq_seg0_idx(conf),
  				    hostapd_get_oper_centr_freq_seg1_idx(conf),
-@@ -4374,7 +4376,8 @@ static int hostapd_change_config_freq(st
+@@ -4379,7 +4383,8 @@ static int hostapd_change_config_freq(struct hostapd_data *hapd,
  				    NULL,
  				    mode ? &mode->eht_capab[IEEE80211_MODE_AP] :
  				    NULL,
@@ -466,22 +697,24 @@ Subject: [PATCH 6/8] AP: add S1G support
  		return -1;
  
  	switch (params->bandwidth) {
+diff --git a/src/ap/hw_features.c b/src/ap/hw_features.c
+index 6c5d563f2..df1b5b400 100644
 --- a/src/ap/hw_features.c
 +++ b/src/ap/hw_features.c
-@@ -204,6 +204,12 @@ int hostapd_prepare_rates(struct hostapd
+@@ -204,6 +204,12 @@ int hostapd_prepare_rates(struct hostapd_iface *iface,
  	int basic_rates_g[] = { 10, 20, 55, 110, -1 };
  	int *basic_rates;
  
 +#ifdef CONFIG_IEEE80211AH
 +	/* S1G does not support basic rates */
-+	if (iface->conf->ieee80211ah)
++	if (mode->mode == HOSTAPD_MODE_IEEE80211AH)
 +		return 0;
 +#endif
 +
  	if (iface->conf->basic_rates)
  		basic_rates = iface->conf->basic_rates;
  	else switch (mode->mode) {
-@@ -1057,6 +1063,12 @@ static int hostapd_is_usable_chans(struc
+@@ -1057,6 +1063,12 @@ static int hostapd_is_usable_chans(struct hostapd_iface *iface)
  		wpa_printf(MSG_ERROR, "Primary frequency not allowed");
  		return err;
  	}
@@ -494,22 +727,59 @@ Subject: [PATCH 6/8] AP: add S1G support
  	err = hostapd_is_usable_edmg(iface);
  	if (err <= 0)
  		return err;
+@@ -1124,7 +1136,9 @@ int hostapd_determine_mode(struct hostapd_iface *iface)
+ 	    iface->conf->hw_mode != HOSTAPD_MODE_IEEE80211ANY)
+ 		return 0;
+ 
+-	if (iface->freq < 4000)
++	if (iface->freq < 1000)
++		target_mode = HOSTAPD_MODE_IEEE80211AH;
++	else if (iface->freq < 4000)
+ 		target_mode = HOSTAPD_MODE_IEEE80211G;
+ 	else if (iface->freq > 50000)
+ 		target_mode = HOSTAPD_MODE_IEEE80211AD;
+@@ -1300,6 +1314,14 @@ int hostapd_select_hw_mode(struct hostapd_iface *iface)
+ 		iface->conf->ieee80211be = 0;
+ 	}
+ 
++	if (iface->conf->hw_mode == HOSTAPD_MODE_IEEE80211AH) {
++		wpa_printf(MSG_INFO, "Disabling HT/VHT/HE/EHT for S1G mode");
++		iface->conf->ieee80211n = 0;
++		iface->conf->ieee80211ac = 0;
++		iface->conf->ieee80211ax = 0;
++		iface->conf->ieee80211be = 0;
++	}
++
+ 	iface->current_mode = NULL;
+ 	for (i = 0; i < iface->num_hw_features; i++) {
+ 		struct hostapd_hw_modes *mode = &iface->hw_features[i];
+@@ -1362,6 +1384,8 @@ const char * hostapd_hw_mode_txt(int mode)
+ 		return "IEEE 802.11g";
+ 	case HOSTAPD_MODE_IEEE80211AD:
+ 		return "IEEE 802.11ad";
++	case HOSTAPD_MODE_IEEE80211AH:
++		return "IEEE 802.11ah";
+ 	default:
+ 		return "UNKNOWN";
+ 	}
+@@ -1409,6 +1433,12 @@ int hostapd_hw_skip_mode(struct hostapd_iface *iface,
+ {
+ 	int i;
+ 
++	if (mode->mode == HOSTAPD_MODE_IEEE80211AH && !iface->current_mode)
++		return 1;
++	if (iface->current_mode &&
++	    iface->current_mode->mode != HOSTAPD_MODE_IEEE80211AH &&
++	    mode->mode == HOSTAPD_MODE_IEEE80211AH)
++		return 1;
+ 	if (iface->current_mode)
+ 		return mode != iface->current_mode;
+ 	if (mode->mode != HOSTAPD_MODE_IEEE80211B)
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index c6d6c6587..842165173 100644
 --- a/src/ap/ieee802_11.c
 +++ b/src/ap/ieee802_11.c
-@@ -126,6 +126,12 @@ u8 * hostapd_eid_supp_rates(struct hosta
- 	int i, num, count;
- 	int h2e_required;
- 
-+#ifdef CONFIG_IEEE80211AH
-+	/* No supp rates for S1G */
-+	if (hapd->iconf->ieee80211ah)
-+		return eid;
-+#endif /* CONFIG_IEEE80211AH */
-+
- 	if (hapd->iface->current_rates == NULL)
- 		return eid;
- 
-@@ -3623,9 +3629,10 @@ static u16 check_multi_ap(struct hostapd
+@@ -3623,9 +3623,10 @@ static u16 check_multi_ap(struct hostapd_data *hapd, struct sta_info *sta,
  u16 hostapd_copy_supp_rates(struct hostapd_data *hapd, struct sta_info *sta,
  			   const struct ieee802_11_elems *elems)
  {
@@ -523,7 +793,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  		return WLAN_STATUS_SUCCESS;
  
  	if (!elems->supp_rates) {
-@@ -4102,6 +4109,15 @@ static int __check_assoc_ies(struct host
+@@ -4102,6 +4103,15 @@ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
  	}
  #endif /* CONFIG_IEEE80211BE */
  
@@ -539,15 +809,17 @@ Subject: [PATCH 6/8] AP: add S1G support
  #ifdef CONFIG_P2P
  	if (elems->p2p && ies && ies_len) {
  		wpabuf_free(sta->p2p_ie);
-@@ -4794,6 +4810,7 @@ static int add_associated_sta(struct hos
+@@ -4794,6 +4804,9 @@ static int add_associated_sta(struct hostapd_data *hapd,
  	struct ieee80211_vht_capabilities vht_cap;
  	struct ieee80211_he_capabilities he_cap;
  	struct ieee80211_eht_capabilities eht_cap;
++#ifdef CONFIG_IEEE80211AH
 +	struct ieee80211_s1g_capabilities s1g_cap;
++#endif /* CONFIG_IEEE80211AH */
  	int set = 1;
  	const u8 *mld_link_addr = NULL;
  	bool mld_link_sta = false;
-@@ -4878,6 +4895,12 @@ static int add_associated_sta(struct hos
+@@ -4878,6 +4891,12 @@ static int add_associated_sta(struct hostapd_data *hapd,
  				      sta->eht_capab_len);
  #endif /* CONFIG_IEEE80211BE */
  
@@ -560,7 +832,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  	/*
  	 * Add the station with forced WLAN_STA_ASSOC flag. The sta->flags
  	 * will be set when the ACK frame for the (Re)Association Response frame
-@@ -4892,7 +4915,7 @@ static int add_associated_sta(struct hos
+@@ -4892,7 +4911,7 @@ static int add_associated_sta(struct hostapd_data *hapd,
  			    sta->flags & WLAN_STA_HE ? sta->he_capab_len : 0,
  			    sta->flags & WLAN_STA_EHT ? &eht_cap : NULL,
  			    sta->flags & WLAN_STA_EHT ? sta->eht_capab_len : 0,
@@ -569,29 +841,34 @@ Subject: [PATCH 6/8] AP: add S1G support
  			    sta->flags | WLAN_STA_ASSOC, sta->qosinfo,
  			    sta->vht_opmode, sta->p2p_ie ? 1 : 0,
  			    set, mld_link_addr, mld_link_sta)) {
-@@ -4925,6 +4948,7 @@ static u16 send_assoc_resp(struct hostap
- 	size_t buflen;
+@@ -4926,6 +4945,7 @@ static u16 send_assoc_resp(struct hostapd_data *hapd, struct sta_info *sta,
  	struct ieee80211_mgmt *reply;
  	u8 *p;
-+	le16 aid = 0;
  	u16 res = WLAN_STATUS_SUCCESS;
++	le16 aid;
  
  	buflen = sizeof(struct ieee80211_mgmt) + 1024;
-@@ -4972,10 +4996,19 @@ static u16 send_assoc_resp(struct hostap
+ #ifdef CONFIG_FILS
+@@ -4967,15 +4987,23 @@ static u16 send_assoc_resp(struct hostapd_data *hapd, struct sta_info *sta,
+ 	os_memcpy(reply->bssid, hapd->own_addr, ETH_ALEN);
+ 
+ 	send_len = IEEE80211_HDRLEN;
+-	send_len += sizeof(reply->u.assoc_resp);
+ 	reply->u.assoc_resp.capab_info =
  		host_to_le16(hostapd_own_capab_info(hapd));
  	reply->u.assoc_resp.status_code = host_to_le16(status_code);
  
 -	reply->u.assoc_resp.aid = host_to_le16((sta ? sta->aid : 0) |
 -					       BIT(14) | BIT(15));
-+	/* TODO fix whatever this hell is */
-+	p = reply->u.assoc_resp.variable;
-+	aid = host_to_le16((sta ? sta->aid : 0) |
-+			   BIT(14) | BIT(15));
-+	if (!hapd->iconf->ieee80211ah) {
-+		reply->u.assoc_resp.aid = aid;
++	aid = host_to_le16((sta ? sta->aid : 0) | BIT(14) | BIT(15));
++	if (hapd->iconf->ieee80211ah) {
++		/* S1G AID is carried in the AID Response element */
++		send_len += sizeof(reply->u.s1g_assoc_resp);
++		p = reply->u.s1g_assoc_resp.variable;
 +	} else {
-+		/* AID field is not included for S1G */
-+		p-= sizeof(reply->u.assoc_resp.aid); // A bit hacky?
++		send_len += sizeof(reply->u.assoc_resp);
++		reply->u.assoc_resp.aid = aid;
++		p = reply->u.assoc_resp.variable;
 +	}
 +
  	/* Supported rates */
@@ -600,7 +877,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  	/* Extended supported rates */
  	p = hostapd_eid_ext_supp_rates(hapd, p);
  
-@@ -5067,6 +5100,14 @@ static u16 send_assoc_resp(struct hostap
+@@ -5067,6 +5095,14 @@ static u16 send_assoc_resp(struct hostapd_data *hapd, struct sta_info *sta,
  	}
  #endif /* CONFIG_IEEE80211AX */
  
@@ -615,9 +892,20 @@ Subject: [PATCH 6/8] AP: add S1G support
  	p = hostapd_eid_ext_capab(hapd, p, false);
  	p = hostapd_eid_bss_max_idle_period(hapd, p,
  					    sta ? sta->max_idle_period : 0);
+@@ -5564,7 +5600,7 @@ static void handle_assoc(struct hostapd_data *hapd,
+ 			hostapd_logger(hapd, mgmt->sa,
+ 				       HOSTAPD_MODULE_IEEE80211,
+ 				       HOSTAPD_LEVEL_INFO,
+-				       "Station tried to associate before authentication (aid=%d flags=0x%x)",
++				       "Station tried to associate before authentication (aid=%d flags=0x%lx)",
+ 				       sta ? sta->aid : -1,
+ 				       sta ? sta->flags : 0);
+ 			send_deauth(hapd, mgmt->sa,
+diff --git a/src/ap/ieee802_11.h b/src/ap/ieee802_11.h
+index 834531121..f1e65a037 100644
 --- a/src/ap/ieee802_11.h
 +++ b/src/ap/ieee802_11.h
-@@ -71,6 +71,13 @@ u8 * hostapd_eid_he_operation(struct hos
+@@ -71,6 +71,10 @@ u8 * hostapd_eid_he_operation(struct hostapd_data *hapd, u8 *eid);
  u8 * hostapd_eid_he_mu_edca_parameter_set(struct hostapd_data *hapd, u8 *eid);
  u8 * hostapd_eid_spatial_reuse(struct hostapd_data *hapd, u8 *eid);
  u8 * hostapd_eid_he_6ghz_band_cap(struct hostapd_data *hapd, u8 *eid);
@@ -625,13 +913,10 @@ Subject: [PATCH 6/8] AP: add S1G support
 +u8 * hostapd_eid_s1g_capab(struct hostapd_data *hapd, u8 *eid);
 +u8 * hostapd_eid_s1g_beacon_compat(struct hostapd_data *hapd, u8 *eid);
 +u8 * hostapd_eid_aid_response(struct hostapd_data *hapd, u8 *eid, le16 aid);
-+
-+u8 hostapd_s1g_get_pri_chan_width(u8 s1g_oper_chwidth);
-+u8 hostapd_s1g_get_pri_chan_loc(u8 s1g_oper_chwidth);
  
  int hostapd_ht_operation_update(struct hostapd_iface *iface);
  void ieee802_11_send_sa_query_req(struct hostapd_data *hapd,
-@@ -151,6 +158,12 @@ int hostapd_update_time_adv(struct hosta
+@@ -151,6 +155,12 @@ int hostapd_update_time_adv(struct hostapd_data *hapd);
  void hostapd_client_poll_ok(struct hostapd_data *hapd, const u8 *addr);
  u8 * hostapd_eid_bss_max_idle_period(struct hostapd_data *hapd, u8 *eid,
  				     u16 value);
@@ -644,9 +929,12 @@ Subject: [PATCH 6/8] AP: add S1G support
  
  int auth_sae_init_committed(struct hostapd_data *hapd, struct sta_info *sta);
  #ifdef CONFIG_SAE
+diff --git a/src/ap/ieee802_11_s1g.c b/src/ap/ieee802_11_s1g.c
+new file mode 100644
+index 000000000..b79de44bd
 --- /dev/null
 +++ b/src/ap/ieee802_11_s1g.c
-@@ -0,0 +1,158 @@
+@@ -0,0 +1,196 @@
 +/*
 + * hostapd / IEEE 802.11ah S1G
 + * Copyright (c) 2022, Morse Micro
@@ -665,14 +953,12 @@ Subject: [PATCH 6/8] AP: add S1G support
 +#include "beacon.h"
 +#include "ieee802_11.h"
 +
++/* 1SS, MCS9. TODO set via config */
++#define S1G_BASIC_MCS_NSS 0xCCC4
++
 +static u8 hostapd_global_op_class_to_s1g_op_class(u8 global)
 +{
 +	switch(global) {
-+		/* AU */
-+		case 50: return 22;
-+		case 51: return 23;
-+		case 52: return 24;
-+		case 53: return 25;
 +		/* US */
 +		case 68: return 1;
 +		case 69: return 2;
@@ -683,12 +969,41 @@ Subject: [PATCH 6/8] AP: add S1G support
 +	}
 +}
 +
++static u8 hostapd_s1g_calc_pri_1mhz_loc(struct hostapd_data *hapd)
++{
++	u8 low_chan;
++	u8 pri_1mhz_chan = hapd->iconf->channel;
++	u8 oper_ch = hapd->iconf->s1g_oper_centr_freq_idx ?
++		     hapd->iconf->s1g_oper_centr_freq_idx :
++		     hapd->iconf->channel;
++
++	if (hapd->iconf->s1g_oper_chwidth == CONF_OPER_CHWIDTH_1MHZ)
++		return 0;
++
++	switch (hapd->iconf->s1g_oper_chwidth) {
++	case CONF_OPER_CHWIDTH_4MHZ:
++		low_chan = oper_ch - 3;
++		break;
++	case CONF_OPER_CHWIDTH_8MHZ:
++		low_chan = oper_ch - 7;
++		break;
++	case CONF_OPER_CHWIDTH_16MHZ:
++		low_chan = oper_ch - 15;
++		break;
++	default:
++		return 0;
++	}
++
++	return ((pri_1mhz_chan - low_chan) / 2) & 1;
++}
++
 +u8 *hostapd_eid_s1g_oper(struct hostapd_data *hapd, u8 *eid)
 +{
 +	struct ieee80211_s1g_operation *cap;
 +	u8 *pos = eid;
 +	u8 ch_width = 0;
 +	u8 bss_width;
++	u8 s1g_pri_loc = hostapd_s1g_calc_pri_1mhz_loc(hapd);
 +
 +	*pos++ = WLAN_EID_S1G_OPERATION;
 +	*pos++ = sizeof(*cap);
@@ -698,12 +1013,23 @@ Subject: [PATCH 6/8] AP: add S1G support
 +
 +	/* IEEE80211-2024 Table 10-39 */
 +	switch (hapd->iconf->s1g_oper_chwidth) {
-+		case CONF_OPER_CHWIDTH_1MHZ:  bss_width = 0x0; break;
-+		case CONF_OPER_CHWIDTH_2MHZ:  bss_width = 0x1; break;
-+		case CONF_OPER_CHWIDTH_4MHZ:  bss_width = 0x3; break;
-+		case CONF_OPER_CHWIDTH_8MHZ:  bss_width = 0x7; break;
-+		case CONF_OPER_CHWIDTH_16MHZ: bss_width = 0xF; break;
-+		default:                      return NULL;
++	case CONF_OPER_CHWIDTH_1MHZ:
++		bss_width = 0x0;
++		break;
++	case CONF_OPER_CHWIDTH_2MHZ:
++		bss_width = 0x1;
++		break;
++	case CONF_OPER_CHWIDTH_4MHZ:
++		bss_width = 0x3;
++		break;
++	case CONF_OPER_CHWIDTH_8MHZ:
++		bss_width = 0x7;
++		break;
++	case CONF_OPER_CHWIDTH_16MHZ:
++		bss_width = 0xF;
++		break;
++	default:
++		return NULL;
 +	}
 +
 +	if (!hapd->iconf->s1g_primary_2mhz)
@@ -711,15 +1037,15 @@ Subject: [PATCH 6/8] AP: add S1G support
 +
 +	ch_width |= (bss_width << 1) & S1G_OPER_IE_CHANWIDTH_OPER_CH_MASK;
 +
-+	if (hapd->iconf->s1g_primary_2mhz && hapd->iconf->s1g_pri_loc)
++	if (hapd->iconf->s1g_primary_2mhz && s1g_pri_loc)
 +		ch_width |= S1G_OPER_IE_CHANWIDTH_PRIM_OFFSET;
 +
-+	cap->ch_width   = ch_width;
++	cap->ch_width = ch_width;
 +	cap->oper_class = hostapd_global_op_class_to_s1g_op_class(hapd->iconf->op_class);
-+	cap->basic_mcs_nss = host_to_le16(0xCCC4);
++	cap->basic_mcs_nss = host_to_le16(S1G_BASIC_MCS_NSS);
 +
 +	if (hapd->iconf->s1g_primary_2mhz) {
-+		if (hapd->iconf->s1g_pri_loc)
++		if (s1g_pri_loc)
 +			cap->primary_ch = hapd->iconf->channel - 1;
 +		else
 +			cap->primary_ch = hapd->iconf->channel + 1;
@@ -769,7 +1095,7 @@ Subject: [PATCH 6/8] AP: add S1G support
 +	*pos++ = (beacon_int >> 8) & 0xff;
 +
 +	/*
-+	 * Last 4 octets will be filled by the driver to contain the 4
++	 * Last 4 octets will be filled by the driver/fw to contain the 4
 +	 * MSB of the TSF timer at time of generation.
 +	 */
 +	*pos++ = 0;
@@ -806,9 +1132,11 @@ Subject: [PATCH 6/8] AP: add S1G support
 +	os_memcpy(dest, src, len);
 +}
 \ No newline at end of file
+diff --git a/src/ap/ieee802_11_shared.c b/src/ap/ieee802_11_shared.c
+index 3dd3a6a77..0185f4194 100644
 --- a/src/ap/ieee802_11_shared.c
 +++ b/src/ap/ieee802_11_shared.c
-@@ -479,6 +479,20 @@ static void hostapd_ext_capab_byte(struc
+@@ -479,6 +479,20 @@ static void hostapd_ext_capab_byte(struct hostapd_data *hapd, u8 *pos, int idx,
  	}
  }
  
@@ -829,9 +1157,11 @@ Subject: [PATCH 6/8] AP: add S1G support
  
  u8 * hostapd_eid_ext_capab(struct hostapd_data *hapd, u8 *eid,
  			   bool mbssid_complete)
+diff --git a/src/ap/sta_info.c b/src/ap/sta_info.c
+index bae6011e2..9aa58184e 100644
 --- a/src/ap/sta_info.c
 +++ b/src/ap/sta_info.c
-@@ -415,6 +415,7 @@ void ap_free_sta(struct hostapd_data *ha
+@@ -415,6 +415,7 @@ void ap_free_sta(struct hostapd_data *hapd, struct sta_info *sta)
  	os_free(sta->he_capab);
  	os_free(sta->he_6ghz_capab);
  	os_free(sta->eht_capab);
@@ -839,7 +1169,16 @@ Subject: [PATCH 6/8] AP: add S1G support
  	hostapd_free_psk_list(sta->psk);
  	os_free(sta->identity);
  	os_free(sta->radius_cui);
-@@ -1885,7 +1886,7 @@ int ap_sta_re_add(struct hostapd_data *h
+@@ -540,7 +541,7 @@ void ap_handle_timer(void *eloop_ctx, void *timeout_ctx)
+ 	int reason;
+ 	int max_inactivity = hapd->conf->ap_max_inactivity;
+ 
+-	wpa_printf(MSG_DEBUG, "%s: %s: " MACSTR " flags=0x%x timeout_next=%d",
++	wpa_printf(MSG_DEBUG, "%s: %s: " MACSTR " flags=0x%lx timeout_next=%d",
+ 		   hapd->conf->iface, __func__, MAC2STR(sta->addr), sta->flags,
+ 		   sta->timeout_next);
+ 	if (sta->timeout_next == STA_REMOVE) {
+@@ -1885,7 +1886,7 @@ int ap_sta_re_add(struct hostapd_data *hapd, struct sta_info *sta)
  	if (hostapd_sta_add(hapd, sta->addr, 0, 0,
  			    sta->supported_rates,
  			    sta->supported_rates_len,
@@ -848,6 +1187,8 @@ Subject: [PATCH 6/8] AP: add S1G support
  			    sta->flags, 0, 0, 0, 0,
  			    mld_link_addr, mld_link_sta)) {
  		hostapd_logger(hapd, sta->addr,
+diff --git a/src/ap/sta_info.h b/src/ap/sta_info.h
+index c3b288e01..16eba334b 100644
 --- a/src/ap/sta_info.h
 +++ b/src/ap/sta_info.h
 @@ -48,6 +48,7 @@
@@ -875,9 +1216,19 @@ Subject: [PATCH 6/8] AP: add S1G support
  
  	int sa_query_count; /* number of pending SA Query requests;
  			     * 0 = no SA Query in progress */
+diff --git a/src/common/defs.h b/src/common/defs.h
+index e1c2901c9..19ae33262 100644
 --- a/src/common/defs.h
 +++ b/src/common/defs.h
-@@ -475,6 +475,11 @@ enum oper_chan_width {
+@@ -383,6 +383,7 @@ enum hostapd_hw_mode {
+ 	HOSTAPD_MODE_IEEE80211G,
+ 	HOSTAPD_MODE_IEEE80211A,
+ 	HOSTAPD_MODE_IEEE80211AD,
++	HOSTAPD_MODE_IEEE80211AH,
+ 	HOSTAPD_MODE_IEEE80211ANY,
+ 	NUM_HOSTAPD_MODES
+ };
+@@ -475,6 +476,11 @@ enum oper_chan_width {
  	CONF_OPER_CHWIDTH_8640MHZ,
  	CONF_OPER_CHWIDTH_40MHZ_6GHZ,
  	CONF_OPER_CHWIDTH_320MHZ,
@@ -889,9 +1240,11 @@ Subject: [PATCH 6/8] AP: add S1G support
  };
  
  enum key_flag {
+diff --git a/src/common/hw_features_common.c b/src/common/hw_features_common.c
+index 5eaade91f..117445e93 100644
 --- a/src/common/hw_features_common.c
 +++ b/src/common/hw_features_common.c
-@@ -460,13 +460,15 @@ int hostapd_set_freq_params(struct hosta
+@@ -460,13 +460,15 @@ int hostapd_set_freq_params(struct hostapd_freq_params *data,
  			    int channel, int enable_edmg,
  			    u8 edmg_channel, int ht_enabled,
  			    int vht_enabled, int he_enabled,
@@ -909,7 +1262,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  {
  	enum oper_chan_width oper_chwidth_legacy;
  	u8 seg0_legacy, seg1_legacy;
-@@ -484,9 +486,11 @@ int hostapd_set_freq_params(struct hosta
+@@ -484,9 +486,11 @@ int hostapd_set_freq_params(struct hostapd_freq_params *data,
  	data->vht_enabled = vht_enabled;
  	data->he_enabled = he_enabled;
  	data->eht_enabled = eht_enabled;
@@ -921,7 +1274,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  	if (oper_chwidth == CONF_OPER_CHWIDTH_80MHZ)
  		data->bandwidth = 80;
  	else if (oper_chwidth == CONF_OPER_CHWIDTH_160MHZ ||
-@@ -503,7 +507,40 @@ int hostapd_set_freq_params(struct hosta
+@@ -503,7 +507,40 @@ int hostapd_set_freq_params(struct hostapd_freq_params *data,
  	hostapd_encode_edmg_chan(enable_edmg, edmg_channel, channel,
  				 &data->edmg);
  
@@ -953,7 +1306,7 @@ Subject: [PATCH 6/8] AP: add S1G support
 +			data->center_freq1_offset = KHZ_TO_S1G_OFFSET(freq1);
 +		}
 +
-+                data->ht_enabled  = 0;
++		data->ht_enabled  = 0;
 +		data->vht_enabled = 0;
 +		data->he_enabled  = 0;
 +		data->eht_enabled = 0;
@@ -963,7 +1316,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  		if (!data->he_enabled && !data->eht_enabled) {
  			wpa_printf(MSG_ERROR,
  				   "Can't set 6 GHz mode - HE or EHT aren't enabled");
-@@ -936,6 +973,12 @@ int chan_bw_allowed(const struct hostapd
+@@ -936,6 +973,12 @@ int chan_bw_allowed(const struct hostapd_channel_data *chan, u32 bw,
  	u32 bw_mask;
  
  	switch (bw) {
@@ -976,9 +1329,11 @@ Subject: [PATCH 6/8] AP: add S1G support
  	case 20:
  		bw_mask = HOSTAPD_CHAN_WIDTH_20;
  		break;
+diff --git a/src/common/hw_features_common.h b/src/common/hw_features_common.h
+index 63c0893e2..58138c49f 100644
 --- a/src/common/hw_features_common.h
 +++ b/src/common/hw_features_common.h
-@@ -45,13 +45,15 @@ int hostapd_set_freq_params(struct hosta
+@@ -45,13 +45,15 @@ int hostapd_set_freq_params(struct hostapd_freq_params *data,
  			    int channel, int edmg, u8 edmg_channel,
  			    int ht_enabled,
  			    int vht_enabled, int he_enabled,
@@ -996,9 +1351,11 @@ Subject: [PATCH 6/8] AP: add S1G support
  void set_disable_ht40(struct ieee80211_ht_capabilities *htcaps,
  		      int disabled);
  int ieee80211ac_cap_check(u32 hw, u32 conf);
+diff --git a/src/common/ieee802_11_common.c b/src/common/ieee802_11_common.c
+index 8d80e78dc..919ccbfb1 100644
 --- a/src/common/ieee802_11_common.c
 +++ b/src/common/ieee802_11_common.c
-@@ -663,7 +663,7 @@ static ParseRes __ieee802_11_parse_elems
+@@ -663,7 +663,7 @@ static ParseRes __ieee802_11_parse_elems(const u8 *start, size_t len,
  		case WLAN_EID_S1G_CAPABILITIES:
  			if (elen < 15)
  				break;
@@ -1007,7 +1364,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  			break;
  		case WLAN_EID_FRAGMENT:
  			wpa_printf(MSG_MSGDUMP,
-@@ -675,6 +675,11 @@ static ParseRes __ieee802_11_parse_elems
+@@ -675,6 +675,16 @@ static ParseRes __ieee802_11_parse_elems(const u8 *start, size_t len,
  						       len, show_errors))
  				unknown++;
  			break;
@@ -1016,10 +1373,15 @@ Subject: [PATCH 6/8] AP: add S1G support
 +				break;
 +			elems->s1g_operation = pos;
 +			break;
++		case WLAN_EID_AID_RESPONSE:
++			if (elen < sizeof(struct ieee80211_aid_response))
++				break;
++			elems->aid_response = pos;
++			break;
  		default:
  			unknown++;
  			if (!show_errors)
-@@ -871,7 +876,10 @@ void ieee802_11_elems_clear_ids(struct i
+@@ -871,7 +881,10 @@ void ieee802_11_elems_clear_ids(struct ieee802_11_elems *elems,
  			elems->dils_len = 0;
  			break;
  		case WLAN_EID_S1G_CAPABILITIES:
@@ -1031,17 +1393,28 @@ Subject: [PATCH 6/8] AP: add S1G support
  			break;
  		}
  	}
-@@ -1414,6 +1422,9 @@ ieee80211_freq_to_channel_ext(unsigned i
+@@ -1414,6 +1427,9 @@ ieee80211_freq_to_channel_ext(unsigned int freq, int sec_channel,
  
  	/* TODO: more operating classes */
  
 +	if (is_s1ghz_freq(freq))
-+		return HOSTAPD_MODE_IEEE80211A;
++		return HOSTAPD_MODE_IEEE80211AH;
 +
  	if (sec_channel > 1 || sec_channel < -1)
  		return NUM_HOSTAPD_MODES;
  
-@@ -3039,6 +3050,12 @@ bool is_same_band(int freq1, int freq2)
+@@ -1917,10 +1933,6 @@ static int ieee80211_chan_to_freq_khz_global(u8 op_class, u8 chan)
+ {
+ 	/* Table E-4 in IEEE Std 802.11-2020 - Global operating classes */
+ 	switch (op_class) {
+-	case 50:
+-	case 51:
+-	case 52:
+-	case 53:
+ 	case 68:
+ 	case 69:
+ 	case 70:
+@@ -3043,6 +3055,12 @@ bool is_same_band(int freq1, int freq2)
  }
  
  
@@ -1054,31 +1427,44 @@ Subject: [PATCH 6/8] AP: add S1G support
  int ieee802_11_parse_candidate_list(const char *pos, u8 *nei_rep,
  				    size_t nei_rep_len)
  {
-@@ -3320,6 +3337,24 @@ int op_class_to_bandwidth(u8 op_class)
+@@ -3324,6 +3342,16 @@ int op_class_to_bandwidth(u8 op_class)
  enum oper_chan_width op_class_to_ch_width(u8 op_class)
  {
  	switch (op_class) {
-+	case 50:
++	case 68: /* S1G 2024 US 1MHz */
 +		return CONF_OPER_CHWIDTH_1MHZ;
-+	case 51:
++	case 69: /* S1G 2024 US 2MHz */
 +		return CONF_OPER_CHWIDTH_2MHZ;
-+	case 52:
++	case 70: /* S1G 2024 US 4MHz */
 +		return CONF_OPER_CHWIDTH_4MHZ;
-+	case 53:
++	case 71: /* S1G 2024 US 8MHz */
 +		return CONF_OPER_CHWIDTH_8MHZ;
-+	case 68:
-+		return CONF_OPER_CHWIDTH_1MHZ;
-+	case 69:
-+		return CONF_OPER_CHWIDTH_2MHZ;
-+	case 70:
-+		return CONF_OPER_CHWIDTH_4MHZ;
-+	case 71:
-+		return CONF_OPER_CHWIDTH_8MHZ;
-+	case 72:
++	case 72: /* S1G 2024 US 16MHz */
 +		return CONF_OPER_CHWIDTH_16MHZ;
  	case 81:
  	case 82:
  		return CONF_OPER_CHWIDTH_USE_HT;
+@@ -3491,3 +3519,18 @@ const u8 * get_basic_mle_mld_addr(const u8 *buf, size_t len)
+ 
+ 	return &buf[mld_addr_pos];
+ }
++
++bool is_supported_s1g_op_class(u8 op_class)
++{
++	switch (op_class) {
++		/* IEEE80211-2024 US */
++		case 68:
++		case 69:
++		case 70:
++		case 71:
++		case 72:
++			return true;
++		default:
++			return false;
++	}
++}
+diff --git a/src/common/ieee802_11_common.h b/src/common/ieee802_11_common.h
+index 0c0d7f080..ba5e72a94 100644
 --- a/src/common/ieee802_11_common.h
 +++ b/src/common/ieee802_11_common.h
 @@ -107,7 +107,7 @@ struct ieee802_11_elems {
@@ -1090,22 +1476,26 @@ Subject: [PATCH 6/8] AP: add S1G support
  	const u8 *pasn_params;
  	const u8 *eht_capabilities;
  	const u8 *eht_operation;
-@@ -121,6 +121,7 @@ struct ieee802_11_elems {
+@@ -121,6 +121,8 @@ struct ieee802_11_elems {
  	const u8 *rsne_override;
  	const u8 *rsne_override_2;
  	const u8 *rsn_selection;
 +	const u8 *s1g_operation;
++	const u8 *aid_response;
  
  	u8 ssid_len;
  	u8 supp_rates_len;
-@@ -309,6 +310,7 @@ int get_6ghz_sec_channel(int channel);
+@@ -309,6 +311,8 @@ int get_6ghz_sec_channel(int channel);
  bool is_same_band(int freq1, int freq2);
  #define IS_2P4GHZ(n) (n >= 2412 && n <= 2484)
  #define IS_5GHZ(n) (n > 4000 && n < 5895)
 +bool is_s1ghz_freq(int freq);
++bool is_supported_s1g_op_class(u8 op_class);
  
  int ieee802_11_parse_candidate_list(const char *pos, u8 *nei_rep,
  				    size_t nei_rep_len);
+diff --git a/src/common/ieee802_11_defs.h b/src/common/ieee802_11_defs.h
+index 07e783330..6b99cba0f 100644
 --- a/src/common/ieee802_11_defs.h
 +++ b/src/common/ieee802_11_defs.h
 @@ -89,6 +89,12 @@
@@ -1140,7 +1530,19 @@ Subject: [PATCH 6/8] AP: add S1G support
  struct ieee80211_hdr_s1g_beacon {
  	le16 frame_control;
  	le16 duration_id;
-@@ -1168,6 +1178,18 @@ struct ieee80211_mgmt {
+@@ -1021,6 +1031,11 @@ struct ieee80211_mgmt {
+ 			/* followed by Supported rates */
+ 			u8 variable[];
+ 		} STRUCT_PACKED assoc_resp, reassoc_resp;
++		struct {
++			le16 capab_info;
++			le16 status_code;
++			u8 variable[];
++		} STRUCT_PACKED s1g_assoc_resp, s1g_reassoc_resp;
+ 		struct {
+ 			le16 capab_info;
+ 			le16 listen_interval;
+@@ -1168,6 +1183,18 @@ struct ieee80211_mgmt {
  	} u;
  } STRUCT_PACKED;
  
@@ -1159,7 +1561,7 @@ Subject: [PATCH 6/8] AP: add S1G support
  
  #define IEEE80211_MAX_MMPDU_SIZE 2304
  
-@@ -2604,6 +2626,28 @@ struct ieee80211_he_mu_edca_parameter_se
+@@ -2604,6 +2631,34 @@ struct ieee80211_he_mu_edca_parameter_set {
  /* B7: Reserved if sent by an AP; More Data Ack if sent by a non-AP STA */
  #define HE_QOS_INFO_MORE_DATA_ACK ((u8) (BIT(7)))
  
@@ -1176,6 +1578,12 @@ Subject: [PATCH 6/8] AP: add S1G support
 +	le16 basic_mcs_nss;
 +} STRUCT_PACKED;
 +
++struct ieee80211_aid_response {
++	u16 aid;
++	u8 switch_count;
++	u16 response_interval;
++} STRUCT_PACKED;
++
 +#define S1G_OPER_IE_CHANWIDTH_PRIM_CH_MASK     (BIT(0))
 +#define S1G_OPER_IE_CHANWIDTH_OPER_CH_MASK     (BIT(1) | BIT(2) | \
 +						BIT(3) | BIT(4))
@@ -1188,76 +1596,11 @@ Subject: [PATCH 6/8] AP: add S1G support
  /*
   * IEEE Std 802.11-2020 and IEEE Std 802.11ax-2021
   * 9.4.2.170 Reduced Neighbor Report element
---- a/src/drivers/driver.h
-+++ b/src/drivers/driver.h
-@@ -61,6 +61,9 @@ enum hostapd_chan_width_attr {
- 	HOSTAPD_CHAN_WIDTH_80   = BIT(4),
- 	HOSTAPD_CHAN_WIDTH_160  = BIT(5),
- 	HOSTAPD_CHAN_WIDTH_320  = BIT(6),
-+	HOSTAPD_CHAN_WIDTH_4    = BIT(9),
-+	HOSTAPD_CHAN_WIDTH_8    = BIT(10),
-+	HOSTAPD_CHAN_WIDTH_16   = BIT(11),
- };
- 
- /* Filter gratuitous ARP */
-@@ -323,6 +326,11 @@ struct hostapd_hw_modes {
- 	 * eht_capab - EHT (IEEE 802.11be) capabilities
- 	 */
- 	struct eht_capabilities eht_capab[IEEE80211_MODE_NUM];
-+
-+	/**
-+	 * s1g_capab - S1G (IEEE 802.11ah) capabilities
-+	 */
-+	struct ieee80211_s1g_capabilities s1g_capab;
- };
- 
- 
-@@ -877,6 +885,11 @@ struct hostapd_freq_params {
- 	int he_enabled;
- 
- 	/**
-+	 * s1g_enabled - Whether S1G is enabled
-+	 */
-+	int s1g_enabled;
-+
-+	/**
- 	 * center_freq1 - Segment 0 center frequency in MHz
- 	 *
- 	 * Valid for both HT and VHT.
-@@ -898,7 +911,7 @@ struct hostapd_freq_params {
- 	int center_freq2;
- 
- 	/**
--	 * bandwidth - Channel bandwidth in MHz (20, 40, 80, 160)
-+	 * bandwidth - Channel bandwidth in MHz (1, 2, 4, 8, 16, 20, 40, 80, 160)
- 	 */
- 	int bandwidth;
- 
-@@ -922,6 +935,13 @@ struct hostapd_freq_params {
- 	 * link_id: If >=0 indicates the link of the AP MLD to configure
- 	 */
- 	int link_id;
-+
-+	/**
-+	 * s1g_primary_2mhz: Determines if the S1G channel is operating as a 2MHz primary.
-+	 *
-+	 * S1G primary channels can either be 1MHz or 2MHz.
-+	 */
-+	bool s1g_primary_2mhz;
- };
- 
- /**
-@@ -2606,6 +2626,7 @@ struct hostapd_sta_add_params {
- 	const struct ieee80211_he_6ghz_band_cap *he_6ghz_capab;
- 	const struct ieee80211_eht_capabilities *eht_capab;
- 	size_t eht_capab_len;
-+	const struct ieee80211_s1g_capabilities *s1g_capab;
- 	u32 flags; /* bitmask of WPA_STA_* flags */
- 	u32 flags_mask; /* unset bits in flags */
- #ifdef CONFIG_MESH
+diff --git a/wlantest/bss.c b/wlantest/bss.c
+index b0de1d4eb..ada4c9950 100644
 --- a/wlantest/bss.c
 +++ b/wlantest/bss.c
-@@ -199,7 +199,7 @@ void bss_update(struct wlantest *wt, str
+@@ -199,7 +199,7 @@ void bss_update(struct wlantest *wt, struct wlantest_bss *bss,
  	 * Probe Response frames. Note this assumes short beacons were dropped
  	 * due to missing SSID above.
  	 */
@@ -1266,143 +1609,6 @@ Subject: [PATCH 6/8] AP: add S1G support
  		if (bss->rsnie[0]) {
  			add_note(wt, MSG_INFO, "BSS " MACSTR
  				 " - RSN IE removed", MAC2STR(bss->bssid));
---- a/wpa_supplicant/Makefile
-+++ b/wpa_supplicant/Makefile
-@@ -1047,6 +1047,9 @@ endif
- ifdef CONFIG_IEEE80211BE
- OBJS += ../src/ap/ieee802_11_eht.o
- endif
-+ifdef CONFIG_IEEE80211AH
-+OBJS += ../src/ap/ieee802_11_s1g.o
-+endif
- ifdef CONFIG_WNM_AP
- CFLAGS += -DCONFIG_WNM_AP
- OBJS += ../src/ap/wnm_ap.o
-@@ -1085,6 +1088,9 @@ endif
- ifdef CONFIG_IEEE80211AX
- CFLAGS += -DCONFIG_IEEE80211AX
- endif
-+ifdef CONFIG_IEEE80211AH
-+CFLAGS += -DCONFIG_IEEE80211AH
-+endif
- 
- ifdef NEED_AP_MLME
- OBJS += ../src/ap/wmm.o
---- a/wpa_supplicant/defconfig
-+++ b/wpa_supplicant/defconfig
-@@ -688,3 +688,6 @@ CONFIG_DPP2=y
- 
- # Wi-Fi Aware unsynchronized service discovery (NAN USD)
- #CONFIG_NAN_USD=y
-+
-+# IEEE 802.11ah (S1G) support
-+#CONFIG_IEEE80211AH=y
---- a/wpa_supplicant/mesh.c
-+++ b/wpa_supplicant/mesh.c
-@@ -226,12 +226,13 @@ static int wpas_mesh_update_freq_params(
- 		    ifmsh->conf->ieee80211ac,
- 		    ifmsh->conf->ieee80211ax,
- 		    ifmsh->conf->ieee80211be,
-+		    0, /* No S1G mesh support */
- 		    ifmsh->conf->secondary_channel,
- 		    hostapd_get_oper_chwidth(ifmsh->conf),
- 		    hostapd_get_oper_centr_freq_seg0_idx(ifmsh->conf),
- 		    hostapd_get_oper_centr_freq_seg1_idx(ifmsh->conf),
- 		    ifmsh->conf->vht_capab,
--		    he_capab, NULL, 0)) {
-+		    he_capab, NULL, 0, 0, false)) {
- 		wpa_printf(MSG_ERROR, "Error updating mesh frequency params");
- 		wpa_supplicant_mesh_deinit(wpa_s, true);
- 		return -1;
---- a/wpa_supplicant/wpa_supplicant.c
-+++ b/wpa_supplicant/wpa_supplicant.c
-@@ -2068,6 +2068,12 @@ int wpa_supplicant_set_suites(struct wpa
- 			"RSN: Enable SAE hash-to-element mode for 6 GHz BSS");
- 		sae_pwe = SAE_PWE_BOTH;
- 	}
-+	if (bss && is_s1ghz_freq(bss->freq) &&
-+	    (sae_pwe == SAE_PWE_HUNT_AND_PECK || sae_pwe == SAE_PWE_BOTH)) {
-+		wpa_dbg(wpa_s, MSG_DEBUG,
-+			"RSN: hunt-and-peck not permitted with an S1G BSS");
-+		sae_pwe = SAE_PWE_HASH_TO_ELEMENT;
-+	}
- 	wpa_sm_set_param(wpa_s->wpa, WPA_PARAM_SAE_PWE, sae_pwe);
- #ifdef CONFIG_SAE_PK
- 	wpa_sm_set_param(wpa_s->wpa, WPA_PARAM_SAE_PK,
-@@ -2084,6 +2090,12 @@ int wpa_supplicant_set_suites(struct wpa
- 		wpa_sm_set_param(wpa_s->wpa, WPA_PARAM_MFP,
- 				 MGMT_FRAME_PROTECTION_REQUIRED);
- 	}
-+	if (bss && is_s1ghz_freq(bss->freq) &&
-+	    wpas_get_ssid_pmf(wpa_s, ssid) != MGMT_FRAME_PROTECTION_REQUIRED) {
-+		wpa_dbg(wpa_s, MSG_DEBUG, "RSN: Force MFPR=1 on S1GHz");
-+		wpa_sm_set_param(wpa_s->wpa, WPA_PARAM_MFP,
-+				 MGMT_FRAME_PROTECTION_REQUIRED);
-+	}
- #ifdef CONFIG_TESTING_OPTIONS
- 	wpa_sm_set_param(wpa_s->wpa, WPA_PARAM_FT_RSNXE_USED,
- 			 wpa_s->ft_rsnxe_used);
-@@ -3209,11 +3221,11 @@ skip_80mhz:
- 				    freq->channel, ssid->enable_edmg,
- 				    ssid->edmg_channel, freq->ht_enabled,
- 				    freq->vht_enabled, freq->he_enabled,
--				    freq->eht_enabled,
-+				    freq->eht_enabled, 0, /* No S1G mesh */
- 				    freq->sec_channel_offset,
- 				    chwidth, seg0, seg1, vht_caps,
- 				    &mode->he_capab[ieee80211_mode],
--				    &mode->eht_capab[ieee80211_mode], 0) != 0)
-+				    &mode->eht_capab[ieee80211_mode], 0, 0, false) != 0)
- 		return false;
- 
- 	*freq = vht_freq;
---- a/src/ap/ubus.c
-+++ b/src/ap/ubus.c
-@@ -769,6 +769,7 @@ hostapd_switch_chan(struct ubus_context
- 				css.freq_params.vht_enabled,
- 				css.freq_params.he_enabled,
- 				css.freq_params.eht_enabled,
-+				css.freq_params.s1g_enabled,
- 				css.freq_params.sec_channel_offset,
- 				chwidth, seg0, seg1,
- 				iconf->vht_capab,
-@@ -776,7 +777,9 @@ hostapd_switch_chan(struct ubus_context
- 				NULL,
- 				mode ? &mode->eht_capab[IEEE80211_MODE_AP] :
- 				NULL,
--				hostapd_get_punct_bitmap(hapd));
-+				hostapd_get_punct_bitmap(hapd),
-+				iconf->op_class,
-+				iconf->s1g_primary_2mhz);
- 
- 	for (i = 0; i < hapd->iface->num_bss; i++) {
- 		struct hostapd_data *bss = hapd->iface->bss[i];
---- a/src/ap/ucode.c
-+++ b/src/ap/ucode.c
-@@ -610,6 +610,7 @@ out:
- 				 conf->ieee80211ac,
- 				 conf->ieee80211ax,
- 				 conf->ieee80211be,
-+				 conf->ieee80211ah,
- 				 conf->secondary_channel,
- 				 hostapd_get_oper_chwidth(conf),
- 				 hostapd_get_oper_centr_freq_seg0_idx(conf),
---- a/src/ap/apup.c
-+++ b/src/ap/apup.c
-@@ -64,7 +64,7 @@ void apup_process_beacon(struct hostapd_
- 	/* First add the station without more information */
- 	int aRet = hostapd_sta_add(
- 	            hapd, mgmt->bssid, sta_ret->aid, 0,
--	            NULL, 0, 0, NULL, NULL, NULL, 0, NULL, 0, NULL,
-+	            NULL, 0, 0, NULL, NULL, NULL, 0, NULL, 0, NULL, NULL,
- 	            sta_ret->flags, 0, 0, 0,
- 	            0, // 0 add, 1 set
- 	            mld_link_addr, mld_link_sta);
-@@ -136,6 +136,7 @@ void apup_process_beacon(struct hostapd_
- 	            sta_ret->he_capab, sta_ret->he_capab_len,
- 	            sta_ret->eht_capab, sta_ret->eht_capab_len,
- 	            sta_ret->he_6ghz_capab,
-+				sta_ret->s1g_capab,
- 	            sta_ret->flags,
- 	            0, // u8 qosinfo
- 	            sta_ret->vht_opmode,
+-- 
+2.43.0
+

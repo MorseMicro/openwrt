@@ -1,13 +1,27 @@
-From 383a5ae1f9e0506d46b667baca9bedb03819a848 Mon Sep 17 00:00:00 2001
+From c4f88a7c71dbf952fec49f4eb3ce3da8664840a7 Mon Sep 17 00:00:00 2001
 From: Lachlan Hodges <lachlan.hodges@morsemicro.com>
 Date: Mon, 27 Oct 2025 10:53:52 +1100
-Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
+Subject: [PATCH 2/9] AP/STA: introduce support for freq_offset
 
+80211ah or S1G sits below 1GHz with channel granularity of 500KHz,
+meaning MHz alone is not enough to correctly represent a channels
+center frequency. This requires the introduction of a 'freq_offset'
+parameter that sits alongside the 'freq' parameter. Where `freq_offset`
+exists as a KHz component to be added to `freq`. This parameter is
+introduced anywhere we pass `freq` such that an S1G channel
+can be correctly defined.
+
+Additionally, internal channel calculation functions have been
+converted to KHz - similarly to cfg80211 - whilst the external
+callers such as ieee80211_chan_to_freq() simply convert the internal
+KHz result to MHz to reduce API churn.
+
+Signed-off-by: Lachlan Hodges <lachlan.hodges@morsemicro.com>
 ---
  src/ap/ap_drv_ops.c               |  10 ++-
  src/ap/ap_drv_ops.h               |   3 +-
  src/ap/beacon.c                   |   1 +
- src/ap/dfs.c                      |   4 +-
+ src/ap/dfs.c                      |   2 +-
  src/ap/drv_callbacks.c            |   6 +-
  src/ap/hostapd.c                  |  29 ++++---
  src/ap/hostapd.h                  |   1 +
@@ -16,14 +30,13 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  src/common/defs.h                 |   4 +
  src/common/hw_features_common.c   |  22 +++--
  src/common/hw_features_common.h   |  13 +--
- src/common/ieee802_11_common.c    | 132 ++++++++++++++++++------------
+ src/common/ieee802_11_common.c    | 136 ++++++++++++++++++------------
  src/common/ieee802_11_common.h    |   1 +
  src/common/privsep_commands.h     |   1 +
- src/common/proximity_ranging.h    |   3 +-
  src/drivers/driver.h              |  44 +++++++++-
  src/drivers/driver_nl80211.c      |   2 +-
  src/drivers/driver_privsep.c      |   7 +-
- wpa_supplicant/ap.c               |   3 +-
+ wpa_supplicant/ap.c               |   4 +-
  wpa_supplicant/bss.c              |   5 +-
  wpa_supplicant/bss.h              |   2 +
  wpa_supplicant/config.c           |   1 +
@@ -33,18 +46,20 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  wpa_supplicant/events.c           |   8 +-
  wpa_supplicant/ibss_rsn.c         |   2 +-
  wpa_supplicant/mesh.c             |   2 +-
- wpa_supplicant/p2p_supplicant.c   |   4 +-
+ wpa_supplicant/p2p_supplicant.c   |   3 +-
  wpa_supplicant/pasn_supplicant.c  |   4 +-
  wpa_supplicant/scan.c             |  10 ++-
- wpa_supplicant/sme.c              |  12 ++-
+ wpa_supplicant/sme.c              |  13 +--
  wpa_supplicant/wpa_priv.c         |   1 +
  wpa_supplicant/wpa_supplicant.c   |   7 +-
  wpa_supplicant/wpa_supplicant_i.h |   2 +
- 36 files changed, 272 insertions(+), 141 deletions(-)
+ 35 files changed, 273 insertions(+), 140 deletions(-)
 
+diff --git a/src/ap/ap_drv_ops.c b/src/ap/ap_drv_ops.c
+index c091bdc07..f7f5eec71 100644
 --- a/src/ap/ap_drv_ops.c
 +++ b/src/ap/ap_drv_ops.c
-@@ -666,7 +666,8 @@ int hostapd_flush(struct hostapd_data *h
+@@ -666,7 +666,8 @@ int hostapd_flush(struct hostapd_data *hapd)
  
  
  int hostapd_set_freq(struct hostapd_data *hapd, enum hostapd_hw_mode mode,
@@ -54,7 +69,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  		     int ht_enabled, int vht_enabled,
  		     int he_enabled, bool eht_enabled,
  		     int sec_channel_offset, int oper_chwidth,
-@@ -675,7 +676,8 @@ int hostapd_set_freq(struct hostapd_data
+@@ -675,7 +676,8 @@ int hostapd_set_freq(struct hostapd_data *hapd, enum hostapd_hw_mode mode,
  	struct hostapd_freq_params data;
  	struct hostapd_hw_modes *cmode = hapd->iface->current_mode;
  
@@ -64,7 +79,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  				    edmg_channel, ht_enabled,
  				    vht_enabled, he_enabled, eht_enabled,
  				    sec_channel_offset, oper_chwidth,
-@@ -880,7 +882,7 @@ int hostapd_drv_send_mlme(struct hostapd
+@@ -880,7 +882,7 @@ int hostapd_drv_send_mlme(struct hostapd_data *hapd,
  
  	if (!hapd->driver || !hapd->driver->send_mlme || !hapd->drv_priv)
  		return 0;
@@ -73,7 +88,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  				       csa_offs, csa_offs_len, no_encrypt, 0,
  				       link_id);
  }
-@@ -1043,7 +1045,7 @@ int hostapd_start_dfs_cac(struct hostapd
+@@ -1043,7 +1045,7 @@ int hostapd_start_dfs_cac(struct hostapd_iface *iface,
  		return -1;
  	}
  
@@ -82,9 +97,11 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  				    ht_enabled,
  				    vht_enabled, he_enabled, eht_enabled,
  				    sec_channel_offset,
+diff --git a/src/ap/ap_drv_ops.h b/src/ap/ap_drv_ops.h
+index 19b15c91f..c745fa58c 100644
 --- a/src/ap/ap_drv_ops.h
 +++ b/src/ap/ap_drv_ops.h
-@@ -73,7 +73,8 @@ int hostapd_get_seqnum(const char *ifnam
+@@ -73,7 +73,8 @@ int hostapd_get_seqnum(const char *ifname, struct hostapd_data *hapd,
  		       const u8 *addr, int idx, int link_id, u8 *seq);
  int hostapd_flush(struct hostapd_data *hapd);
  int hostapd_set_freq(struct hostapd_data *hapd, enum hostapd_hw_mode mode,
@@ -94,9 +111,11 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  		     int ht_enabled, int vht_enabled, int he_enabled,
  		     bool eht_enabled, int sec_channel_offset, int oper_chwidth,
  		     int center_segment0, int center_segment1);
+diff --git a/src/ap/beacon.c b/src/ap/beacon.c
+index d904fa265..5cbeb84e1 100644
 --- a/src/ap/beacon.c
 +++ b/src/ap/beacon.c
-@@ -2721,6 +2721,7 @@ static int __ieee802_11_set_beacon(struc
+@@ -2721,6 +2721,7 @@ static int __ieee802_11_set_beacon(struct hostapd_data *hapd)
  
  	if (cmode &&
  	    hostapd_set_freq_params(&freq, iconf->hw_mode, iface->freq,
@@ -104,9 +123,11 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  				    iconf->channel, iconf->enable_edmg,
  				    iconf->edmg_channel, iconf->ieee80211n,
  				    iconf->ieee80211ac, iconf->ieee80211ax,
+diff --git a/src/ap/dfs.c b/src/ap/dfs.c
+index d55d2c750..cab07c4d1 100644
 --- a/src/ap/dfs.c
 +++ b/src/ap/dfs.c
-@@ -1023,7 +1023,7 @@ static int hostapd_dfs_request_channel_s
+@@ -1023,7 +1023,7 @@ static int hostapd_dfs_request_channel_switch(struct hostapd_iface *iface,
  #endif /* CONFIG_MESH */
  	err = hostapd_set_freq_params(&csa_settings.freq_params,
  				      iface->conf->hw_mode,
@@ -115,9 +136,11 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  				      iface->conf->enable_edmg,
  				      iface->conf->edmg_channel,
  				      iface->conf->ieee80211n,
+diff --git a/src/ap/drv_callbacks.c b/src/ap/drv_callbacks.c
+index b62905322..fc3f81e61 100644
 --- a/src/ap/drv_callbacks.c
 +++ b/src/ap/drv_callbacks.c
-@@ -1228,7 +1228,7 @@ void hostapd_event_ch_switch(struct host
+@@ -1228,7 +1228,7 @@ void hostapd_event_ch_switch(struct hostapd_data *hapd, int freq, int ht,
  	is_dfs0 = hostapd_is_dfs_required(hapd->iface);
  	hapd->iface->freq = freq;
  
@@ -126,7 +149,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	if (!channel) {
  		hostapd_logger(hapd, NULL, HOSTAPD_MODULE_IEEE80211,
  			       HOSTAPD_LEVEL_WARNING,
-@@ -1482,7 +1482,7 @@ void hostapd_acs_channel_selected(struct
+@@ -1482,7 +1482,7 @@ void hostapd_acs_channel_selected(struct hostapd_data *hapd,
  			if (mode->mode == acs_res->hw_mode) {
  				if (hapd->iface->freq > 0 &&
  				    !hw_get_chan(mode->mode,
@@ -135,7 +158,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  						 hapd->iface->hw_features,
  						 hapd->iface->num_hw_features))
  					continue;
-@@ -1507,7 +1507,7 @@ void hostapd_acs_channel_selected(struct
+@@ -1507,7 +1507,7 @@ void hostapd_acs_channel_selected(struct hostapd_data *hapd,
  		goto out;
  	}
  	pri_chan = hw_get_channel_freq(hapd->iface->current_mode->mode,
@@ -144,9 +167,11 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  				       hapd->iface->hw_features,
  				       hapd->iface->num_hw_features);
  	if (!pri_chan) {
+diff --git a/src/ap/hostapd.c b/src/ap/hostapd.c
+index 6efb8bbc0..f6d32e5f7 100644
 --- a/src/ap/hostapd.c
 +++ b/src/ap/hostapd.c
-@@ -1954,7 +1954,7 @@ static int hostapd_no_ir_channel_list_up
+@@ -1954,7 +1954,7 @@ static int hostapd_no_ir_channel_list_updated(struct hostapd_iface *iface,
  
  		if (mode->mode == iface->conf->hw_mode) {
  			if (iface->freq > 0 &&
@@ -155,17 +180,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  				mode = NULL;
  				continue;
  			}
-@@ -1980,7 +1980,8 @@ static int hostapd_no_ir_channel_list_up
- 			struct hostapd_channel_data *chan;
- 
- 			chan = hw_get_channel_freq(iface->current_mode->mode,
--						   iface->freq, NULL,
-+						   iface->freq, 
-+						   iface->freq_offset, NULL,
- 						   iface->hw_features,
- 						   iface->num_hw_features);
- 
-@@ -2015,7 +2016,8 @@ static int hostapd_no_ir_channel_list_up
+@@ -1980,7 +1980,8 @@ static int hostapd_no_ir_channel_list_updated(struct hostapd_iface *iface,
  			struct hostapd_channel_data *chan;
  
  			chan = hw_get_channel_freq(iface->current_mode->mode,
@@ -174,8 +189,18 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
 +						   iface->freq_offset, NULL,
  						   iface->hw_features,
  						   iface->num_hw_features);
+ 
+@@ -2015,7 +2016,8 @@ static int hostapd_no_ir_channel_list_updated(struct hostapd_iface *iface,
+ 			struct hostapd_channel_data *chan;
+ 
+ 			chan = hw_get_channel_freq(iface->current_mode->mode,
+-						   iface->freq, NULL,
++						   iface->freq, 
++						   iface->freq_offset, NULL,
+ 						   iface->hw_features,
+ 						   iface->num_hw_features);
  			if (!chan) {
-@@ -2154,20 +2156,21 @@ static int setup_interface(struct hostap
+@@ -2154,20 +2156,21 @@ static int setup_interface(struct hostapd_iface *iface)
  
  static int configured_fixed_chan_to_freq(struct hostapd_iface *iface)
  {
@@ -198,11 +223,11 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  		}
 -		iface->freq = freq;
 +		iface->freq = KHZ_TO_MHZ(freq_khz);
-+		iface->freq_offset = freq_khz % 1000;
++		iface->freq_offset = KHZ_TO_S1G_OFFSET(freq_khz);
  		return 0;
  	}
  
-@@ -2616,7 +2619,8 @@ static int hostapd_setup_interface_compl
+@@ -2616,7 +2619,8 @@ static int hostapd_setup_interface_complete_sync(struct hostapd_iface *iface,
  #endif /* CONFIG_MESH */
  
  		if (!delay_apply_cfg &&
@@ -212,7 +237,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  				     hapd->iconf->channel,
  				     hapd->iconf->enable_edmg,
  				     hapd->iconf->edmg_channel,
-@@ -4344,7 +4348,7 @@ static int hostapd_change_config_freq(st
+@@ -4349,7 +4353,7 @@ static int hostapd_change_config_freq(struct hostapd_data *hapd,
  
  	if (!params->channel) {
  		/* check if the new channel is supported by hw */
@@ -221,7 +246,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	}
  
  	channel = params->channel;
-@@ -4357,7 +4361,7 @@ static int hostapd_change_config_freq(st
+@@ -4362,7 +4366,7 @@ static int hostapd_change_config_freq(struct hostapd_data *hapd,
  	/* if a pointer to old_params is provided we save previous state */
  	if (old_params &&
  	    hostapd_set_freq_params(old_params, conf->hw_mode,
@@ -230,7 +255,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  				    conf->channel, conf->enable_edmg,
  				    conf->edmg_channel, conf->ieee80211n,
  				    conf->ieee80211ac, conf->ieee80211ax,
-@@ -4616,7 +4620,8 @@ int hostapd_force_channel_switch(struct
+@@ -4621,7 +4625,8 @@ int hostapd_force_channel_switch(struct hostapd_iface *iface,
  	if (!settings->freq_params.channel) {
  		/* Check if the new channel is supported */
  		settings->freq_params.channel = hostapd_hw_get_channel(
@@ -240,6 +265,8 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  		if (!settings->freq_params.channel)
  			return -1;
  	}
+diff --git a/src/ap/hostapd.h b/src/ap/hostapd.h
+index f01a92a72..2c6ae26a0 100644
 --- a/src/ap/hostapd.h
 +++ b/src/ap/hostapd.h
 @@ -660,6 +660,7 @@ struct hostapd_iface {
@@ -250,9 +277,11 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  
  	bool radar_detected;
  
+diff --git a/src/ap/hw_features.c b/src/ap/hw_features.c
+index 85334e8cd..6c5d563f2 100644
 --- a/src/ap/hw_features.c
 +++ b/src/ap/hw_features.c
-@@ -156,10 +156,11 @@ int hostapd_get_hw_features(struct hosta
+@@ -156,10 +156,11 @@ int hostapd_get_hw_features(struct hostapd_iface *iface)
  				continue;
  
  			wpa_printf(MSG_MSGDUMP, "Allowed channel: mode=%d "
@@ -265,7 +294,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  				   feature->channels[j].max_tx_power,
  				   dfs ? dfs_info(&feature->channels[j]) : "");
  		}
-@@ -284,11 +285,11 @@ static int ieee80211n_allowed_ht40_chann
+@@ -284,11 +285,11 @@ static int ieee80211n_allowed_ht40_channel_pair(struct hostapd_iface *iface)
  	if (!iface->current_mode)
  		return 0;
  
@@ -279,7 +308,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  				     iface->hw_features,
  				     iface->num_hw_features);
  
-@@ -323,10 +324,10 @@ static int ieee80211n_check_40mhz_5g(str
+@@ -323,10 +324,10 @@ static int ieee80211n_check_40mhz_5g(struct hostapd_iface *iface,
  
  	if (!iface->current_mode)
  		return 0;
@@ -292,7 +321,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  				       NULL, iface->hw_features,
  				       iface->num_hw_features);
  
-@@ -863,15 +864,16 @@ int hostapd_check_he_6ghz_capab(struct h
+@@ -863,15 +864,16 @@ int hostapd_check_he_6ghz_capab(struct hostapd_iface *iface)
   * -1 = not currently usable due to 6 GHz NO-IR
   */
  static int hostapd_is_usable_chan(struct hostapd_iface *iface,
@@ -312,7 +341,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	if (!chan)
  		return 0;
  
-@@ -908,7 +910,7 @@ static int hostapd_is_usable_edmg(struct
+@@ -908,7 +910,7 @@ static int hostapd_is_usable_edmg(struct hostapd_iface *iface)
  	if (!iface->current_mode)
  		return 0;
  	pri_chan = hw_get_channel_freq(iface->current_mode->mode,
@@ -321,7 +350,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  				       iface->hw_features,
  				       iface->num_hw_features);
  	if (!pri_chan)
-@@ -938,7 +940,7 @@ static int hostapd_is_usable_edmg(struct
+@@ -938,7 +940,7 @@ static int hostapd_is_usable_edmg(struct hostapd_iface *iface)
  		if (num_of_enabled > 4)
  			return 0;
  
@@ -330,7 +359,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  		if (err <= 0)
  			return err;
  
-@@ -1040,7 +1042,8 @@ static int hostapd_is_usable_chans(struc
+@@ -1040,7 +1042,8 @@ static int hostapd_is_usable_chans(struct hostapd_iface *iface)
  	if (!iface->current_mode)
  		return 0;
  	pri_chan = hw_get_channel_freq(iface->current_mode->mode,
@@ -340,7 +369,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  				       iface->hw_features,
  				       iface->num_hw_features);
  	if (!pri_chan) {
-@@ -1048,7 +1051,8 @@ static int hostapd_is_usable_chans(struc
+@@ -1048,7 +1051,8 @@ static int hostapd_is_usable_chans(struct hostapd_iface *iface)
  		return 0;
  	}
  
@@ -350,7 +379,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	if (err <= 0) {
  		wpa_printf(MSG_ERROR, "Primary frequency not allowed");
  		return err;
-@@ -1064,7 +1068,7 @@ static int hostapd_is_usable_chans(struc
+@@ -1064,7 +1068,7 @@ static int hostapd_is_usable_chans(struct hostapd_iface *iface)
  		return 1;
  
  	err = hostapd_is_usable_chan(iface, iface->freq +
@@ -359,7 +388,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	if (err > 0) {
  		if (iface->conf->secondary_channel == 1 &&
  		    (pri_chan->allowed_bw & HOSTAPD_CHAN_WIDTH_40P))
-@@ -1078,14 +1082,14 @@ static int hostapd_is_usable_chans(struc
+@@ -1078,14 +1082,14 @@ static int hostapd_is_usable_chans(struct hostapd_iface *iface)
  
  	/* Both HT40+ and HT40- are set, pick a valid secondary channel */
  	secondary_freq = iface->freq + 20;
@@ -376,7 +405,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	if (err2 > 0 && (pri_chan->allowed_bw & HOSTAPD_CHAN_WIDTH_40M)) {
  		iface->conf->secondary_channel = -1;
  		return 1;
-@@ -1100,7 +1104,7 @@ static bool skip_mode(struct hostapd_ifa
+@@ -1100,7 +1104,7 @@ static bool skip_mode(struct hostapd_iface *iface,
  {
  	int chan;
  
@@ -385,7 +414,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  		return true;
  
  	if (is_6ghz_op_class(iface->conf->op_class) && iface->freq == 0 &&
-@@ -1370,13 +1374,14 @@ int hostapd_hw_get_freq(struct hostapd_d
+@@ -1370,13 +1374,14 @@ int hostapd_hw_get_freq(struct hostapd_data *hapd, int chan)
  }
  
  
@@ -402,7 +431,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  				      hapd->iface->hw_features,
  				      hapd->iface->num_hw_features);
  		if (channel)
-@@ -1389,7 +1394,7 @@ int hostapd_hw_get_channel(struct hostap
+@@ -1389,7 +1394,7 @@ int hostapd_hw_get_channel(struct hostapd_data *hapd, int freq)
  		return 0;
  	for (i = 0; i < hapd->iface->num_hw_features; i++) {
  		mode = &hapd->iface->hw_features[i];
@@ -411,9 +440,11 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  				      hapd->iface->hw_features,
  				      hapd->iface->num_hw_features);
  		if (channel)
+diff --git a/src/ap/hw_features.h b/src/ap/hw_features.h
+index 73663d0af..5e70c4a65 100644
 --- a/src/ap/hw_features.h
 +++ b/src/ap/hw_features.h
-@@ -20,7 +20,7 @@ int hostapd_acs_completed(struct hostapd
+@@ -20,7 +20,7 @@ int hostapd_acs_completed(struct hostapd_iface *iface, int err);
  int hostapd_select_hw_mode(struct hostapd_iface *iface);
  const char * hostapd_hw_mode_txt(int mode);
  int hostapd_hw_get_freq(struct hostapd_data *hapd, int chan);
@@ -422,6 +453,8 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  int hostapd_check_ht_capab(struct hostapd_iface *iface);
  int hostapd_check_edmg_capab(struct hostapd_iface *iface);
  int hostapd_check_he_6ghz_capab(struct hostapd_iface *iface);
+diff --git a/src/common/defs.h b/src/common/defs.h
+index c7dec0f52..e1c2901c9 100644
 --- a/src/common/defs.h
 +++ b/src/common/defs.h
 @@ -541,4 +541,8 @@ enum sae_pwe {
@@ -433,9 +466,11 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
 +#define KHZ_TO_S1G_OFFSET(x) ((x) % 1000)
 +
  #endif /* DEFS_H */
+diff --git a/src/common/hw_features_common.c b/src/common/hw_features_common.c
+index 9b4910818..5eaade91f 100644
 --- a/src/common/hw_features_common.c
 +++ b/src/common/hw_features_common.c
-@@ -41,14 +41,15 @@ struct hostapd_channel_data * hw_get_cha
+@@ -41,14 +41,15 @@ struct hostapd_channel_data * hw_get_channel_chan(struct hostapd_hw_modes *mode,
  
  
  struct hostapd_channel_data *
@@ -453,7 +488,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  			if (chan)
  				*chan = ch->chan;
  			return ch;
-@@ -60,8 +61,9 @@ hw_mode_get_channel(struct hostapd_hw_mo
+@@ -60,8 +61,9 @@ hw_mode_get_channel(struct hostapd_hw_modes *mode, int freq, int *chan)
  
  
  struct hostapd_channel_data *
@@ -465,7 +500,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  {
  	struct hostapd_channel_data *chan_data;
  	int i;
-@@ -78,7 +80,8 @@ hw_get_channel_freq(enum hostapd_hw_mode
+@@ -78,7 +80,8 @@ hw_get_channel_freq(enum hostapd_hw_mode mode, int freq, int *chan,
  		if (curr_mode->mode != mode)
  			continue;
  
@@ -475,7 +510,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  		if (chan_data)
  			return chan_data;
  	}
-@@ -97,12 +100,13 @@ int hw_get_freq(struct hostapd_hw_modes
+@@ -97,12 +100,13 @@ int hw_get_freq(struct hostapd_hw_modes *mode, int chan)
  }
  
  
@@ -491,7 +526,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  
  	return chan;
  }
-@@ -452,7 +456,8 @@ void punct_update_legacy_bw(u16 bitmap,
+@@ -452,7 +456,8 @@ void punct_update_legacy_bw(u16 bitmap, u8 pri, enum oper_chan_width *width,
  
  int hostapd_set_freq_params(struct hostapd_freq_params *data,
  			    enum hostapd_hw_mode mode,
@@ -501,7 +536,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  			    u8 edmg_channel, int ht_enabled,
  			    int vht_enabled, int he_enabled,
  			    bool eht_enabled, int sec_channel_offset,
-@@ -473,6 +478,7 @@ int hostapd_set_freq_params(struct hosta
+@@ -473,6 +478,7 @@ int hostapd_set_freq_params(struct hostapd_freq_params *data,
  	os_memset(data, 0, sizeof(*data));
  	data->mode = mode;
  	data->freq = freq;
@@ -509,6 +544,8 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	data->channel = channel;
  	data->ht_enabled = ht_enabled;
  	data->vht_enabled = vht_enabled;
+diff --git a/src/common/hw_features_common.h b/src/common/hw_features_common.h
+index 80e33adf2..63c0893e2 100644
 --- a/src/common/hw_features_common.h
 +++ b/src/common/hw_features_common.h
 @@ -15,14 +15,16 @@
@@ -532,7 +569,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  		struct hostapd_hw_modes *hw_features, int num_hw_features);
  
  int allowed_ht40_channel_pair(enum hostapd_hw_mode mode,
-@@ -39,7 +41,8 @@ void punct_update_legacy_bw(u16 bitmap,
+@@ -39,7 +41,8 @@ void punct_update_legacy_bw(u16 bitmap, u8 pri_chan,
  			    enum oper_chan_width *width, u8 *seg0, u8 *seg1);
  int hostapd_set_freq_params(struct hostapd_freq_params *data,
  			    enum hostapd_hw_mode mode,
@@ -542,9 +579,11 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  			    int ht_enabled,
  			    int vht_enabled, int he_enabled,
  			    bool eht_enabled, int sec_channel_offset,
+diff --git a/src/common/ieee802_11_common.c b/src/common/ieee802_11_common.c
+index 56d556980..8d80e78dc 100644
 --- a/src/common/ieee802_11_common.c
 +++ b/src/common/ieee802_11_common.c
-@@ -1720,7 +1720,7 @@ static int country_match(const char *con
+@@ -1720,7 +1720,7 @@ static int country_match(const char *const cc[], const char *const country)
  }
  
  
@@ -553,7 +592,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  {
  	switch (op_class) {
  	case 12: /* channels 1..11 */
-@@ -1728,7 +1728,7 @@ static int ieee80211_chan_to_freq_us(u8
+@@ -1728,7 +1728,7 @@ static int ieee80211_chan_to_freq_us(u8 op_class, u8 chan)
  	case 33: /* channels 5..11; 40 MHz */
  		if (chan < 1 || chan > 11)
  			return -1;
@@ -562,7 +601,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	case 1: /* channels 36,40,44,48 */
  	case 2: /* channels 52,56,60,64; dfs */
  	case 22: /* channels 36,44; 40 MHz */
-@@ -1737,12 +1737,12 @@ static int ieee80211_chan_to_freq_us(u8
+@@ -1737,12 +1737,12 @@ static int ieee80211_chan_to_freq_us(u8 op_class, u8 chan)
  	case 28: /* channels 56,64; 40 MHz */
  		if (chan < 36 || chan > 64)
  			return -1;
@@ -577,7 +616,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	case 3: /* channels 149,153,157,161 */
  	case 25: /* channels 149,157; 40 MHz */
  	case 26: /* channels 149,157; 40 MHz */
-@@ -1750,11 +1750,11 @@ static int ieee80211_chan_to_freq_us(u8
+@@ -1750,11 +1750,11 @@ static int ieee80211_chan_to_freq_us(u8 op_class, u8 chan)
  	case 31: /* channels 153,161; 40 MHz */
  		if (chan < 149 || chan > 161)
  			return -1;
@@ -591,7 +630,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	case 34: /* 60 GHz band, channels 1..8 */
  		if (chan < 1 || chan > 8)
  			return -1;
-@@ -1762,22 +1762,22 @@ static int ieee80211_chan_to_freq_us(u8
+@@ -1762,22 +1762,22 @@ static int ieee80211_chan_to_freq_us(u8 op_class, u8 chan)
  	case 37: /* 60 GHz band, EDMG CB2, channels 9..15 */
  		if (chan < 9 || chan > 15)
  			return -1;
@@ -618,7 +657,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  {
  	switch (op_class) {
  	case 4: /* channels 1..13 */
-@@ -1785,7 +1785,7 @@ static int ieee80211_chan_to_freq_eu(u8
+@@ -1785,7 +1785,7 @@ static int ieee80211_chan_to_freq_eu(u8 op_class, u8 chan)
  	case 12: /* channels 5..13; 40 MHz */
  		if (chan < 1 || chan > 13)
  			return -1;
@@ -627,7 +666,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	case 1: /* channels 36,40,44,48 */
  	case 2: /* channels 52,56,60,64; dfs */
  	case 5: /* channels 36,44; 40 MHz */
-@@ -1794,41 +1794,41 @@ static int ieee80211_chan_to_freq_eu(u8
+@@ -1794,41 +1794,41 @@ static int ieee80211_chan_to_freq_eu(u8 op_class, u8 chan)
  	case 9: /* channels 56,64; 40 MHz */
  		if (chan < 36 || chan > 64)
  			return -1;
@@ -677,7 +716,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  {
  	/* Table E-3 in IEEE Std 802.11-2020 - Operating classes in Japan */
  	switch (op_class) {
-@@ -1837,11 +1837,11 @@ static int ieee80211_chan_to_freq_jp(u8
+@@ -1837,11 +1837,11 @@ static int ieee80211_chan_to_freq_jp(u8 op_class, u8 chan)
  	case 57: /* channels 5..13; 40 MHz */
  		if (chan < 1 || chan > 13)
  			return -1;
@@ -691,7 +730,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	case 1: /* channels 34,38,42,46(old) or 36,40,44,48 */
  	case 32: /* channels 52,56,60,64 */
  	case 33: /* channels 52,56,60,64 */
-@@ -1853,7 +1853,7 @@ static int ieee80211_chan_to_freq_jp(u8
+@@ -1853,7 +1853,7 @@ static int ieee80211_chan_to_freq_jp(u8 op_class, u8 chan)
  	case 43: /* channels 56,64; 40 MHz */
  		if (chan < 34 || chan > 64)
  			return -1;
@@ -700,7 +739,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	case 34: /* channels 100-144 */
  	case 35: /* reserved */
  	case 39: /* channels 100-140; 40 MHz */
-@@ -1863,30 +1863,30 @@ static int ieee80211_chan_to_freq_jp(u8
+@@ -1863,30 +1863,30 @@ static int ieee80211_chan_to_freq_jp(u8 op_class, u8 chan)
  	case 58: /* channels 100-144 */
  		if (chan < 100 || chan > 144)
  			return -1;
@@ -737,7 +776,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  {
  	switch (op_class) {
  	case 7: /* channels 1..13 */
-@@ -1894,44 +1894,56 @@ static int ieee80211_chan_to_freq_cn(u8
+@@ -1894,44 +1894,56 @@ static int ieee80211_chan_to_freq_cn(u8 op_class, u8 chan)
  	case 9: /* channels 5..13; 40 MHz */
  		if (chan < 1 || chan > 13)
  			return -1;
@@ -801,7 +840,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	case 115: /* channels 36,40,44,48; indoor only */
  	case 116: /* channels 36,44; 40 MHz; indoor only */
  	case 117: /* channels 40,48; 40 MHz; indoor only */
-@@ -1940,32 +1952,32 @@ static int ieee80211_chan_to_freq_global
+@@ -1940,32 +1952,32 @@ static int ieee80211_chan_to_freq_global(u8 op_class, u8 chan)
  	case 120: /* channels 56,64; 40 MHz; dfs */
  		if (chan < 36 || chan > 64)
  			return -1;
@@ -840,7 +879,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	case 131: /* UHB channels, 20 MHz: 1, 5, 9.. */
  	case 132: /* UHB channels, 40 MHz: 3, 11, 19.. */
  	case 133: /* UHB channels, 80 MHz: 7, 23, 39.. */
-@@ -1974,7 +1986,7 @@ static int ieee80211_chan_to_freq_global
+@@ -1974,7 +1986,7 @@ static int ieee80211_chan_to_freq_global(u8 op_class, u8 chan)
  	case 137: /* UHB channels, 320 MHz: 31, 63, 95, 127, 159, 191 */
  		if (chan < 1 || chan > 233)
  			return -1;
@@ -849,7 +888,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	case 136: /* UHB channels, 20 MHz: 2 */
  		if (chan == 2)
  			return 5935;
-@@ -1982,60 +1994,72 @@ static int ieee80211_chan_to_freq_global
+@@ -1982,60 +1994,76 @@ static int ieee80211_chan_to_freq_global(u8 op_class, u8 chan)
  	case 180: /* 60 GHz band, channels 1..8 */
  		if (chan < 1 || chan > 8)
  			return -1;
@@ -930,13 +969,19 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
 + */
 +int ieee80211_chan_to_freq(const char *country, u8 op_class, u8 chan)
 +{
-+	return KHZ_TO_MHZ(ieee80211_chan_to_freq_khz(country, op_class, chan));
++	int freq_khz = ieee80211_chan_to_freq_khz(country, op_class, chan);
++	if (freq_khz < 0)
++		return -1;
++
++	return KHZ_TO_MHZ(freq_khz);
  }
  
  
+diff --git a/src/common/ieee802_11_common.h b/src/common/ieee802_11_common.h
+index b8cecab0d..0c0d7f080 100644
 --- a/src/common/ieee802_11_common.h
 +++ b/src/common/ieee802_11_common.h
-@@ -244,6 +244,7 @@ int hostapd_config_tx_queue(struct hosta
+@@ -244,6 +244,7 @@ int hostapd_config_tx_queue(struct hostapd_tx_queue_params queue[],
  			    const char *name, const char *val);
  enum hostapd_hw_mode ieee80211_freq_to_chan(int freq, u8 *channel);
  int ieee80211_chan_to_freq(const char *country, u8 op_class, u8 chan);
@@ -944,6 +989,8 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  enum hostapd_hw_mode
  ieee80211_freq_to_channel_ext(unsigned int freq, int sec_channel,
  			      enum oper_chan_width chanwidth,
+diff --git a/src/common/privsep_commands.h b/src/common/privsep_commands.h
+index d2c4bbd5e..85e1e8997 100644
 --- a/src/common/privsep_commands.h
 +++ b/src/common/privsep_commands.h
 @@ -63,6 +63,7 @@ struct privsep_cmd_associate {
@@ -954,25 +1001,27 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	int channel;
  	int pairwise_suite;
  	int group_suite;
+diff --git a/src/drivers/driver.h b/src/drivers/driver.h
+index 5e9632dd0..5c471ca2f 100644
 --- a/src/drivers/driver.h
 +++ b/src/drivers/driver.h
-@@ -125,6 +125,11 @@ struct hostapd_channel_data {
+@@ -124,6 +124,11 @@ struct hostapd_channel_data {
+ 	 */
  	int freq;
  
- 	/**
++	/**
 +	 * freq_offset - Frequency offset from @freq in KHz
 +	 */
 +	int freq_offset;
 +
-+	/**
+ 	/**
  	 * flag - Channel flags (HOSTAPD_CHAN_*)
  	 */
- 	int flag;
 @@ -365,6 +370,7 @@ struct hostapd_multi_hw_info {
   * @flags: information flags about the BSS/IBSS (WPA_SCAN_*)
   * @bssid: BSSID
   * @freq: frequency of the channel in MHz (e.g., 2412 = channel 1)
-+ * @freq: frequency offset of the channel from @freq in KHz
++ * @freq_offset: frequency offset of the channel from @freq in KHz
   * @max_cw: the max channel width of the connection (calculated during scan
   * result processing)
   * @beacon_int: beacon interval in TUs (host byte order)
@@ -988,10 +1037,10 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	 */
  	int *freqs;
  
-+	 /**
-+	 * freq_offset - freq offset in KHz
++	/**
++	 * freq_offset - Frequency offset in KHz
 +	 *
-+	 * Each @freqs value will have this frequency offset applied
++	 * Each @freqs value will have this frequency offset applied.
 +	 */
 +	int freq_offset;
 +
@@ -1006,32 +1055,32 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	const u8 *bssid;
  	const u8 *ssid;
  	size_t ssid_len;
-@@ -828,6 +843,11 @@ struct hostapd_freq_params {
+@@ -827,6 +842,11 @@ struct hostapd_freq_params {
+ 	 */
  	int freq;
  
- 	/**
++	/**
 +	 * freq_offset - Frequency offset in KHz from @freq
 +	 */
 +	int freq_offset;
 +
-+	/**
+ 	/**
  	 * channel - Channel number
  	 */
- 	int channel;
-@@ -864,6 +884,13 @@ struct hostapd_freq_params {
+@@ -863,6 +883,13 @@ struct hostapd_freq_params {
+ 	 */
  	int center_freq1;
  
- 	/**
++	/**
 +	 * center_freq1_offset - Segment 0 center frequency offset in KHz
 +	 *
 +	 * Valid for S1G.
 +	 */
 +	int center_freq1_offset;
 +
-+	/**
+ 	/**
  	 * center_freq2 - Segment 1 center frequency in MHz
  	 *
- 	 * Non-zero only for bandwidth 80 and an 80+80 channel
 @@ -3401,6 +3428,7 @@ struct wpa_driver_ops {
  	 * @noack: Do not wait for this frame to be acked (disable retries)
  	 * @freq: Frequency (in MHz) to send the frame on, or 0 to let the
@@ -1051,30 +1100,30 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  			 unsigned int wait, int link_id);
  
  	/**
-@@ -6155,6 +6183,11 @@ union wpa_event_data {
+@@ -6154,6 +6182,11 @@ union wpa_event_data {
+ 		 */
  		unsigned int freq;
  
- 		/**
++		/**
 +		 * freq_offset - Frequency offset from @freq in KHz
 +		 */
 +		unsigned int freq_offset;
 +
-+		/**
+ 		/**
  		 * wmm_params - WMM parameters used in this association.
  		 */
- 		struct wmm_params wmm_params;
-@@ -6538,6 +6571,11 @@ union wpa_event_data {
+@@ -6537,6 +6570,11 @@ union wpa_event_data {
+ 		 */
  		int freq;
  
- 		/**
-+		 * freq - Frequency offset (in KHz) from @freq on which the frame was received
++		/**
++		 * freq_offset - Frequency offset (in KHz) from @freq on which the frame was received
 +		 */
 +		int freq_offset;
-+		
-+		/**
++
+ 		/**
  		 * ssi_signal - Signal strength in dBm (or 0 if not available)
  		 */
- 		int ssi_signal;
 @@ -6741,6 +6779,7 @@ union wpa_event_data {
  	 * struct ch_switch
  	 * @count: Count until channel switch activates
@@ -1091,9 +1140,11 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  		int ht_enabled;
  		int ch_offset;
  		enum chan_width ch_width;
+diff --git a/src/drivers/driver_nl80211.c b/src/drivers/driver_nl80211.c
+index 3f48c66ba..37530d4ff 100644
 --- a/src/drivers/driver_nl80211.c
 +++ b/src/drivers/driver_nl80211.c
-@@ -11047,7 +11047,7 @@ static int driver_nl80211_set_first_bss(
+@@ -11047,7 +11047,7 @@ static int driver_nl80211_set_first_bss(void *priv)
  
  static int driver_nl80211_send_mlme(void *priv, const u8 *data,
  				    size_t data_len, int noack,
@@ -1102,6 +1153,8 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  				    const u16 *csa_offs, size_t csa_offs_len,
  				    int no_encrypt, unsigned int wait,
  				    int link_id)
+diff --git a/src/drivers/driver_privsep.c b/src/drivers/driver_privsep.c
+index d6735b49c..c1a0286b1 100644
 --- a/src/drivers/driver_privsep.c
 +++ b/src/drivers/driver_privsep.c
 @@ -303,10 +303,10 @@ static int wpa_driver_privsep_associate(
@@ -1126,18 +1179,21 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	data->channel = params->freq.channel;
  	data->pairwise_suite = params->pairwise_suite;
  	data->group_suite = params->group_suite;
+diff --git a/wpa_supplicant/ap.c b/wpa_supplicant/ap.c
+index 7e8c97c38..25f82f884 100644
 --- a/wpa_supplicant/ap.c
 +++ b/wpa_supplicant/ap.c
-@@ -454,7 +454,7 @@ int wpa_supplicant_conf_ap_ht(struct wpa
+@@ -454,7 +454,8 @@ int wpa_supplicant_conf_ap_ht(struct wpa_supplicant *wpa_s,
  		{
  			if (iface == wpa_s ||
  			    iface->wpa_state < WPA_AUTHENTICATING ||
 -			    (int) iface->assoc_freq != ssid->frequency)
-+			    (int) MHZ_TO_KHZ(iface->assoc_freq) + iface->assoc_freq_offset != MHZ_TO_KHZ(ssid->frequency) + ssid->freq_offset)
++			    MHZ_TO_KHZ(iface->assoc_freq) + iface->assoc_freq_offset !=
++			    MHZ_TO_KHZ(ssid->frequency) + ssid->freq_offset)
  				continue;
  
  			/*
-@@ -1164,6 +1164,7 @@ int wpa_supplicant_create_ap(struct wpa_
+@@ -1164,6 +1165,7 @@ int wpa_supplicant_create_ap(struct wpa_supplicant *wpa_s,
  	eapol_sm_notify_config(wpa_s->eapol, NULL, NULL);
  	os_memcpy(wpa_s->bssid, wpa_s->own_addr, ETH_ALEN);
  	wpa_s->assoc_freq = ssid->frequency;
@@ -1145,9 +1201,11 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	wpa_s->ap_iface->conf->enable_edmg = ssid->enable_edmg;
  	wpa_s->ap_iface->conf->edmg_channel = ssid->edmg_channel;
  
+diff --git a/wpa_supplicant/bss.c b/wpa_supplicant/bss.c
+index 39de8bac3..ed9e6f5d5 100644
 --- a/wpa_supplicant/bss.c
 +++ b/wpa_supplicant/bss.c
-@@ -349,6 +349,7 @@ static void wpa_bss_copy_res(struct wpa_
+@@ -349,6 +349,7 @@ static void wpa_bss_copy_res(struct wpa_bss *dst, struct wpa_scan_res *src,
  	dst->flags = src->flags;
  	os_memcpy(dst->bssid, src->bssid, ETH_ALEN);
  	dst->freq = src->freq;
@@ -1155,18 +1213,20 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	dst->max_cw = src->max_cw;
  	dst->beacon_int = src->beacon_int;
  	dst->caps = src->caps;
-@@ -580,9 +581,9 @@ static struct wpa_bss * wpa_bss_add(stru
+@@ -580,9 +581,9 @@ static struct wpa_bss * wpa_bss_add(struct wpa_supplicant *wpa_s,
  	}
  
  	wpa_dbg(wpa_s, MSG_DEBUG, "BSS: Add new id %u BSSID " MACSTR
 -		" SSID '%s' freq %d%s",
-+		" SSID '%s' freq %d freq_offset %d %s",
++		" SSID '%s' freq %d freq_offset %d%s",
  		bss->id, MAC2STR(bss->bssid), wpa_ssid_txt(ssid, ssid_len),
 -		bss->freq, extra);
 +		bss->freq, bss->freq_offset, extra);
  	wpas_notify_bss_added(wpa_s, bss->bssid, bss->id);
  	return bss;
  }
+diff --git a/wpa_supplicant/bss.h b/wpa_supplicant/bss.h
+index 31688fa54..c4df0d0fd 100644
 --- a/wpa_supplicant/bss.h
 +++ b/wpa_supplicant/bss.h
 @@ -96,6 +96,8 @@ struct wpa_bss {
@@ -1178,9 +1238,11 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	/** The max channel width supported by both the AP and the STA */
  	enum chan_width max_cw;
  	/** Beacon interval in TUs (host byte order) */
+diff --git a/wpa_supplicant/config.c b/wpa_supplicant/config.c
+index 9b759b25f..c64dafb42 100644
 --- a/wpa_supplicant/config.c
 +++ b/wpa_supplicant/config.c
-@@ -2851,6 +2851,7 @@ static const struct parse_data ssid_fiel
+@@ -2851,6 +2851,7 @@ static const struct parse_data ssid_fields[] = {
  	{ INT_RANGE(enable_4addr_mode, 0, 1)},
  	{ INT_RANGE(max_idle, 0, 65535)},
  	{ INT_RANGE(ssid_protection, 0, 1)},
@@ -1188,37 +1250,41 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  };
  
  #undef OFFSET
+diff --git a/wpa_supplicant/config_ssid.h b/wpa_supplicant/config_ssid.h
+index 872bcc270..9f32a8437 100644
 --- a/wpa_supplicant/config_ssid.h
 +++ b/wpa_supplicant/config_ssid.h
-@@ -525,6 +525,11 @@ struct wpa_ssid {
+@@ -524,6 +524,11 @@ struct wpa_ssid {
+ 	 */
  	int frequency;
  
- 	/**
++	/**
 +	 * freq_offset - Channel frequency offset from @frequency in KHz
 +	 */
 +	int freq_offset;
 +
-+	/**
+ 	/**
  	 * enable_edmg - Enable EDMG feature in STA/AP mode
  	 *
- 	 * This flag is used for enabling the EDMG capability in STA/AP mode.
-@@ -631,6 +636,13 @@ struct wpa_ssid {
+@@ -630,6 +635,13 @@ struct wpa_ssid {
+ 	 */
  	int *scan_freq;
  
- 	/**
++	/**
 +	 * scan_freq_offset - Frequency offset in KHz
 +	 *
 +	 * To be applied to each entry in @scan_freq array.
 +	 */
 +	int scan_freq_offset;
 +
-+	/**
+ 	/**
  	 * bgscan - Background scan and roaming parameters or %NULL if none
  	 *
- 	 * This is an optional set of parameters for background scanning and
+diff --git a/wpa_supplicant/ctrl_iface.c b/wpa_supplicant/ctrl_iface.c
+index 437f8eb03..91163531f 100644
 --- a/wpa_supplicant/ctrl_iface.c
 +++ b/wpa_supplicant/ctrl_iface.c
-@@ -10353,6 +10353,7 @@ static int wpas_ctrl_resend_assoc(struct
+@@ -10353,6 +10353,7 @@ static int wpas_ctrl_resend_assoc(struct wpa_supplicant *wpa_s)
  	params.ssid = wpa_s->sme.ssid;
  	params.ssid_len = wpa_s->sme.ssid_len;
  	params.freq.freq = wpa_s->sme.freq;
@@ -1226,9 +1292,11 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	if (wpa_s->last_assoc_req_wpa_ie) {
  		params.wpa_ie = wpabuf_head(wpa_s->last_assoc_req_wpa_ie);
  		params.wpa_ie_len = wpabuf_len(wpa_s->last_assoc_req_wpa_ie);
+diff --git a/wpa_supplicant/driver_i.h b/wpa_supplicant/driver_i.h
+index b6c7f5085..c2fc6963e 100644
 --- a/wpa_supplicant/driver_i.h
 +++ b/wpa_supplicant/driver_i.h
-@@ -324,12 +324,13 @@ static inline int wpa_drv_set_country(st
+@@ -324,12 +324,13 @@ static inline int wpa_drv_set_country(struct wpa_supplicant *wpa_s,
  
  static inline int wpa_drv_send_mlme(struct wpa_supplicant *wpa_s,
  				    const u8 *data, size_t data_len, int noack,
@@ -1246,9 +1314,11 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	return -1;
  }
  
+diff --git a/wpa_supplicant/events.c b/wpa_supplicant/events.c
+index 41fc92a9b..a3ffcbe4d 100644
 --- a/wpa_supplicant/events.c
 +++ b/wpa_supplicant/events.c
-@@ -1651,11 +1651,11 @@ struct wpa_ssid * wpa_scan_res_match(str
+@@ -1651,11 +1651,11 @@ struct wpa_ssid * wpa_scan_res_match(struct wpa_supplicant *wpa_s,
  
  	if (debug_print) {
  		wpa_dbg(wpa_s, MSG_DEBUG, "%d: " MACSTR
@@ -1262,7 +1332,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  			wpa_bss_get_vendor_ie(bss, WPS_IE_VENDOR_TYPE) ?
  			" wps" : "",
  			(wpa_bss_get_vendor_ie(bss, P2P_IE_VENDOR_TYPE) ||
-@@ -5119,8 +5119,10 @@ static void ft_rx_action(struct wpa_supp
+@@ -5119,8 +5119,10 @@ static void ft_rx_action(struct wpa_supplicant *wpa_s, const u8 *data,
  	{
  		struct wpa_bss *bss;
  		bss = wpa_bss_get_bssid(wpa_s, target_ap_addr);
@@ -1274,9 +1344,11 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  		wpa_s->sme.auth_alg = WPA_AUTH_ALG_FT;
  		sme_associate(wpa_s, WPAS_MODE_INFRA, target_ap_addr,
  			      WLAN_AUTH_FT);
+diff --git a/wpa_supplicant/ibss_rsn.c b/wpa_supplicant/ibss_rsn.c
+index 25039a0f9..e296354a4 100644
 --- a/wpa_supplicant/ibss_rsn.c
 +++ b/wpa_supplicant/ibss_rsn.c
-@@ -521,7 +521,7 @@ static int ibss_rsn_send_auth(struct ibs
+@@ -521,7 +521,7 @@ static int ibss_rsn_send_auth(struct ibss_rsn *ibss_rsn, const u8 *da, int seq)
  	wpa_printf(MSG_DEBUG, "RSN: IBSS TX Auth frame (SEQ %d) to " MACSTR,
  		   seq, MAC2STR(da));
  
@@ -1285,9 +1357,11 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  }
  
  
+diff --git a/wpa_supplicant/mesh.c b/wpa_supplicant/mesh.c
+index dabbb0334..c5ae809e9 100644
 --- a/wpa_supplicant/mesh.c
 +++ b/wpa_supplicant/mesh.c
-@@ -218,7 +218,7 @@ static int wpas_mesh_update_freq_params(
+@@ -218,7 +218,7 @@ static int wpas_mesh_update_freq_params(struct wpa_supplicant *wpa_s)
  	if (hostapd_set_freq_params(
  		    &params->freq,
  		    ifmsh->conf->hw_mode,
@@ -1296,9 +1370,11 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  		    ifmsh->conf->channel,
  		    ifmsh->conf->enable_edmg,
  		    ifmsh->conf->edmg_channel,
+diff --git a/wpa_supplicant/p2p_supplicant.c b/wpa_supplicant/p2p_supplicant.c
+index 2f0d77342..d9e7c6fb9 100644
 --- a/wpa_supplicant/p2p_supplicant.c
 +++ b/wpa_supplicant/p2p_supplicant.c
-@@ -2812,7 +2812,7 @@ static int wpas_send_probe_resp(void *ct
+@@ -2812,7 +2812,7 @@ static int wpas_send_probe_resp(void *ctx, const struct wpabuf *buf,
  {
  	struct wpa_supplicant *wpa_s = ctx;
  	return wpa_drv_send_mlme(wpa_s, wpabuf_head(buf), wpabuf_len(buf), 1,
@@ -1307,9 +1383,19 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  }
  
  
+@@ -4886,7 +4886,6 @@ static void wpas_bootstrap_completed(void *ctx, const u8 *addr,
+ 	}
+ }
+ 
+-
+ int wpas_p2p_mac_setup(struct wpa_supplicant *wpa_s)
+ {
+ 	u8 addr[ETH_ALEN] = {0};
+diff --git a/wpa_supplicant/pasn_supplicant.c b/wpa_supplicant/pasn_supplicant.c
+index 89edad49e..88c2c5aaa 100644
 --- a/wpa_supplicant/pasn_supplicant.c
 +++ b/wpa_supplicant/pasn_supplicant.c
-@@ -44,7 +44,7 @@ static int wpas_pasn_send_mlme(void *ctx
+@@ -44,7 +44,7 @@ static int wpas_pasn_send_mlme(void *ctx, const u8 *data, size_t data_len,
  {
  	struct wpa_supplicant *wpa_s = ctx;
  
@@ -1318,7 +1404,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  }
  
  
-@@ -971,7 +971,7 @@ int wpas_pasn_deauthenticate(struct wpa_
+@@ -971,7 +971,7 @@ int wpas_pasn_deauthenticate(struct wpa_supplicant *wpa_s, const u8 *own_addr,
  	 * without a radio work.
  	 */
  	ret = wpa_drv_send_mlme(wpa_s, wpabuf_head(buf), wpabuf_len(buf), 1,
@@ -1327,9 +1413,11 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  
  	wpabuf_free(buf);
  	wpa_printf(MSG_DEBUG, "PASN: deauth: send_mlme ret=%d", ret);
+diff --git a/wpa_supplicant/scan.c b/wpa_supplicant/scan.c
+index f0ab122f5..5a49f55e6 100644
 --- a/wpa_supplicant/scan.c
 +++ b/wpa_supplicant/scan.c
-@@ -1319,6 +1319,7 @@ static void wpa_supplicant_scan(void *el
+@@ -1319,6 +1319,7 @@ static void wpa_supplicant_scan(void *eloop_ctx, void *timeout_ctx)
  				os_free(params.freqs);
  				params.freqs = NULL;
  			}
@@ -1337,7 +1425,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  			freqs_set = 1;
  		}
  		int_array_sort_unique(params.freqs);
-@@ -2541,20 +2542,20 @@ static void dump_scan_res(struct wpa_sca
+@@ -2541,20 +2542,20 @@ static void dump_scan_res(struct wpa_scan_results *scan_res)
  			int noise_valid = !(r->flags & WPA_SCAN_NOISE_INVALID);
  
  			wpa_printf(MSG_EXCESSIVE, MACSTR
@@ -1362,7 +1450,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  				   r->noise, r->level, r->flags, r->age,
  				   r->est_throughput);
  		}
-@@ -3377,6 +3378,7 @@ wpa_scan_clone_params(const struct wpa_d
+@@ -3377,6 +3378,7 @@ wpa_scan_clone_params(const struct wpa_driver_scan_params *src)
  	params->p2p_include_6ghz = src->p2p_include_6ghz;
  	params->non_coloc_6ghz = src->non_coloc_6ghz;
  	params->min_probe_req_content = src->min_probe_req_content;
@@ -1370,9 +1458,11 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	return params;
  
  failed:
+diff --git a/wpa_supplicant/sme.c b/wpa_supplicant/sme.c
+index bf0252b91..2130ea25b 100644
 --- a/wpa_supplicant/sme.c
 +++ b/wpa_supplicant/sme.c
-@@ -609,6 +609,7 @@ static void sme_send_authentication(stru
+@@ -609,6 +609,7 @@ static void sme_send_authentication(struct wpa_supplicant *wpa_s,
  	wpa_s->reassociate = 0;
  
  	params.freq = bss->freq;
@@ -1380,7 +1470,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	params.bssid = bss->bssid;
  	params.ssid = bss->ssid;
  	params.ssid_len = bss->ssid_len;
-@@ -619,6 +620,7 @@ static void sme_send_authentication(stru
+@@ -619,6 +620,7 @@ static void sme_send_authentication(struct wpa_supplicant *wpa_s,
  		wpa_s->sme.prev_bssid_set = 0;
  
  	wpa_s->sme.freq = params.freq;
@@ -1400,7 +1490,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  
  	eapol_sm_notify_portValid(wpa_s->eapol, false);
  	wpa_clear_keys(wpa_s, bss->bssid);
-@@ -1409,7 +1412,7 @@ static int sme_external_auth_send_sae_co
+@@ -1409,7 +1412,7 @@ static int sme_external_auth_send_sae_commit(struct wpa_supplicant *wpa_s,
  				    wpa_s->sme.seq_num, status,
  				    wpa_s->sme.ext_ml_auth ?
  				    wpa_s->own_addr : NULL);
@@ -1409,7 +1499,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	wpabuf_free(resp);
  	wpabuf_free(buf);
  
-@@ -1490,7 +1493,7 @@ static void sme_external_auth_send_sae_c
+@@ -1490,7 +1493,7 @@ static void sme_external_auth_send_sae_confirm(struct wpa_supplicant *wpa_s,
  				    wpa_s->sme.ext_ml_auth ?
  				    wpa_s->own_addr : NULL);
  
@@ -1418,7 +1508,15 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	wpabuf_free(resp);
  	wpabuf_free(buf);
  }
-@@ -2535,6 +2538,7 @@ mscs_fail:
+@@ -1526,7 +1529,6 @@ static bool is_sae_key_mgmt_suite(struct wpa_supplicant *wpa_s, u32 suite)
+ 	return true;
+ }
+ 
+-
+ void sme_external_auth_trigger(struct wpa_supplicant *wpa_s,
+ 			       union wpa_event_data *data)
+ {
+@@ -2535,6 +2537,7 @@ mscs_fail:
  	params.ssid = wpa_s->sme.ssid;
  	params.ssid_len = wpa_s->sme.ssid_len;
  	params.freq.freq = wpa_s->sme.freq;
@@ -1426,9 +1524,11 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	params.bg_scan_period = ssid ? ssid->bg_scan_period : -1;
  	params.wpa_ie = wpa_s->sme.assoc_req_ie_len ?
  		wpa_s->sme.assoc_req_ie : NULL;
+diff --git a/wpa_supplicant/wpa_priv.c b/wpa_supplicant/wpa_priv.c
+index 92efe5629..a1ce87207 100644
 --- a/wpa_supplicant/wpa_priv.c
 +++ b/wpa_supplicant/wpa_priv.c
-@@ -325,6 +325,7 @@ static void wpa_priv_cmd_associate(struc
+@@ -325,6 +325,7 @@ static void wpa_priv_cmd_associate(struct wpa_priv_interface *iface,
  	params.ssid_len = assoc->ssid_len;
  	params.freq.mode = assoc->hwmode;
  	params.freq.freq = assoc->freq;
@@ -1436,9 +1536,11 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  	params.freq.channel = assoc->channel;
  	if (assoc->wpa_ie_len) {
  		params.wpa_ie = (u8 *) (assoc + 1);
+diff --git a/wpa_supplicant/wpa_supplicant.c b/wpa_supplicant/wpa_supplicant.c
+index 15153cedd..ec7daea92 100644
 --- a/wpa_supplicant/wpa_supplicant.c
 +++ b/wpa_supplicant/wpa_supplicant.c
-@@ -2723,8 +2723,10 @@ void wpa_supplicant_associate(struct wpa
+@@ -2723,8 +2723,10 @@ void wpa_supplicant_associate(struct wpa_supplicant *wpa_s,
  				"Driver does not support mesh mode");
  			return;
  		}
@@ -1450,7 +1552,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  		if (wpa_supplicant_join_mesh(wpa_s, ssid) < 0) {
  			wpa_supplicant_set_state(wpa_s, WPA_INACTIVE);
  			wpa_msg(wpa_s, MSG_ERROR, "Could not join mesh");
-@@ -3203,6 +3205,7 @@ static bool ibss_mesh_select_80_160mhz(s
+@@ -3203,6 +3205,7 @@ static bool ibss_mesh_select_80_160mhz(struct wpa_supplicant *wpa_s,
  
  skip_80mhz:
  	if (hostapd_set_freq_params(&vht_freq, mode->mode, freq->freq,
@@ -1458,7 +1560,7 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  				    freq->channel, ssid->enable_edmg,
  				    ssid->edmg_channel, freq->ht_enabled,
  				    freq->vht_enabled, freq->he_enabled,
-@@ -3234,6 +3237,7 @@ void ibss_mesh_setup_freq(struct wpa_sup
+@@ -3234,6 +3237,7 @@ void ibss_mesh_setup_freq(struct wpa_supplicant *wpa_s,
  	bool dfs_enabled = wpa_s->conf->country[0] && (wpa_s->drv_flags & WPA_DRIVER_FLAGS_RADAR);
  
  	freq->freq = ssid->frequency;
@@ -1466,14 +1568,16 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  
  	if (ssid->fixed_freq) {
  		obss_scan = 0;
-@@ -4410,6 +4414,7 @@ static void wpas_start_assoc_cb(struct w
+@@ -4410,6 +4414,7 @@ static void wpas_start_assoc_cb(struct wpa_radio_work *work, int deinit)
  				   wpa_s->key_mgmt == WPA_KEY_MGMT_WPS);
  			params.bssid = bss->bssid;
  			params.freq.freq = bss->freq;
-+                        params.freq.freq_offset = bss->freq_offset;
++			params.freq.freq_offset = bss->freq_offset;
  		}
  		params.bssid_hint = bss->bssid;
  		params.freq_hint = bss->freq;
+diff --git a/wpa_supplicant/wpa_supplicant_i.h b/wpa_supplicant/wpa_supplicant_i.h
+index 2b303ca40..ab8ecde99 100644
 --- a/wpa_supplicant/wpa_supplicant_i.h
 +++ b/wpa_supplicant/wpa_supplicant_i.h
 @@ -734,6 +734,7 @@ struct wpa_supplicant {
@@ -1492,32 +1596,6 @@ Subject: [PATCH 2/8] AP/SA: introduce support for freq_offset
  		u8 assoc_req_ie[1500];
  		size_t assoc_req_ie_len;
  		int mfp;
---- a/src/ap/ubus.c
-+++ b/src/ap/ubus.c
-@@ -744,7 +744,7 @@ hostapd_switch_chan(struct ubus_context
- 	SET_CSA_SETTING(CSA_HE, freq_params.he_enabled, bool);
- 	SET_CSA_SETTING(CSA_BLOCK_TX, block_tx, bool);
- 
--	css.freq_params.channel = hostapd_hw_get_channel(hapd, css.freq_params.freq);
-+	css.freq_params.channel = hostapd_hw_get_channel(hapd, css.freq_params.freq, css.freq_params.freq_offset);
- 	if (!css.freq_params.channel)
- 		return UBUS_STATUS_NOT_SUPPORTED;
- 
-@@ -762,6 +762,7 @@ hostapd_switch_chan(struct ubus_context
- 
- 	hostapd_set_freq_params(&css.freq_params, iconf->hw_mode,
- 				css.freq_params.freq,
-+				css.freq_params.freq_offset,
- 				css.freq_params.channel, iconf->enable_edmg,
- 				iconf->edmg_channel,
- 				css.freq_params.ht_enabled,
---- a/src/ap/ucode.c
-+++ b/src/ap/ucode.c
-@@ -602,6 +602,7 @@ out:
- 
- 		hapd->conf->start_disabled = 0;
- 		hostapd_set_freq(hapd, conf->hw_mode, iface->freq,
-+				 iface->freq_offset,
- 				 conf->channel,
- 				 conf->enable_edmg,
- 				 conf->edmg_channel,
+-- 
+2.43.0
+

@@ -1,35 +1,21 @@
-From 3df42cecaced413825306e12c663c55f433bc8b0 Mon Sep 17 00:00:00 2001
+From 6de1147ce92bec09f8f7777bf507ab494e71a774 Mon Sep 17 00:00:00 2001
 From: Lachlan Hodges <lachlan.hodges@morsemicro.com>
 Date: Mon, 27 Oct 2025 14:30:47 +1100
-Subject: [PATCH 5/8] config: enable configuration of S1G
+Subject: [PATCH 5/9] config: enable configuration of S1G
 
+Introduce the ability to configure an S1G radio. This consists of a new
+hw_mode=ah for the S1G band, ieee80211ah to denote if S1G is enabled,
+s1g_oper_centr_freq_idx for the operating center frequency and
+s1g_primary_2mhz to denote the primary (control) channel width.
+
+Signed-off-by: Lachlan Hodges <lachlan.hodges@morsemicro.com>
 ---
- hostapd/config_file.c | 12 ++++++++++++
- hostapd/defconfig     |  3 +++
- hostapd/hostapd.conf  | 41 +++++++++++++++++++++++++++++++++++++----
- 3 files changed, 52 insertions(+), 4 deletions(-)
+ hostapd/defconfig    |  3 +++
+ hostapd/hostapd.conf | 26 ++++++++++++++++++++++----
+ 2 files changed, 25 insertions(+), 4 deletions(-)
 
---- a/hostapd/config_file.c
-+++ b/hostapd/config_file.c
-@@ -3991,6 +3991,18 @@ static int hostapd_config_fill(struct ho
- 		}
- 		conf->mbssid = mbssid;
- #endif /* CONFIG_IEEE80211AX */
-+#ifdef CONFIG_IEEE80211AH
-+	} else if (os_strcmp(buf, "ieee80211ah") == 0) {
-+		conf->ieee80211ah = atoi(pos);
-+	} else if (os_strcmp(buf, "s1g_oper_chwidth") == 0) {
-+		conf->s1g_oper_chwidth = atoi(pos);
-+	} else if (os_strcmp(buf, "s1g_oper_centr_freq_idx") == 0) {
-+		conf->s1g_oper_centr_freq_idx = atoi(pos);
-+	} else if (os_strcmp(buf, "s1g_pri_loc") == 0) {
-+		conf->s1g_pri_loc = atoi(pos);
-+	} else if (os_strcmp(buf, "s1g_primary_2mhz") == 0) {
-+		conf->s1g_primary_2mhz = atoi(pos);
-+#endif /* CONFIG_IEEE80211AH */
- 	} else if (os_strcmp(buf, "max_listen_interval") == 0) {
- 		bss->max_listen_interval = atoi(pos);
- 	} else if (os_strcmp(buf, "disable_pmksa_caching") == 0) {
+diff --git a/hostapd/defconfig b/hostapd/defconfig
+index 8af8ecd95..deea31285 100644
 --- a/hostapd/defconfig
 +++ b/hostapd/defconfig
 @@ -438,3 +438,6 @@ CONFIG_DPP2=y
@@ -39,6 +25,8 @@ Subject: [PATCH 5/8] config: enable configuration of S1G
 +
 +# IEEE 802.11ah (S1G) support
 +#CONFIG_IEEE80211AH=y
+diff --git a/hostapd/hostapd.conf b/hostapd/hostapd.conf
+index 93524cf5d..412285174 100644
 --- a/hostapd/hostapd.conf
 +++ b/hostapd/hostapd.conf
 @@ -147,10 +147,10 @@ ssid=test
@@ -50,49 +38,37 @@ Subject: [PATCH 5/8] config: enable configuration of S1G
 -# This special case is currently supported only with drivers with which
 -# offloaded ACS is used.
 +# to be set to hw_mode=a. For IEEE 802.11ah (S1G) this needs to be set to
-+# hw_mode=a. When using ACS (see channel parameter), a special value "any" can
++# hw_mode=ah. When using ACS (see channel parameter), a special value "any" can
 +# be used to indicate that any support band can be used. This special case is
-+#currently supported only with drivers with which offloaded ACS is used.
++# currently supported only with drivers with which offloaded ACS is used.
  # Default: IEEE 802.11b
  hw_mode=g
  
-@@ -1101,6 +1101,39 @@ wmm_ac_vo_acm=0
- # as the AP MLD MAC address. If not set, the current interface hardware address
+@@ -1102,6 +1102,24 @@ wmm_ac_vo_acm=0
  # will be used as the AP MLD MAC address.
  #mld_addr=02:03:04:05:06:07
-+#
+ 
 +##### IEEE 802.11ah related configuration ################################
 +
-+# IEEE 802.11ah (S1G) supported.
++# ieee80211ah: Whether IEEE 802.11ah (S1G) is enabled
 +# 0 = disabled (default)
 +# 1 = enabled
++# Note: hw_mode=ah is used to specify that the 900MHz band is used with ah.
 +#ieee80211ah=1
 +
 +# S1G operating channel
-+# indicates the channel index of the BSS operating channel
-+#s1g_oper_centr_freq_idx=37
-+
-+# S1G operating channel bandwidth.
-+# 0 = 1 MHz
-+# 1 = 2 MHz
-+# 2 = 4 MHz
-+# 3 = 8 MHz
-+# 4 = 16 MHz
-+#s1g_oper_chwidth=2
++# Indicates the channel index of the BSS operating channel
++#s1g_oper_centr_freq_idx=44
 +
 +# S1G primary 2MHz
-+# Specifies is a 2MHz primary channel is being used. If a 2MHz primary is
-+# selected, s1g_pri_loc must be configured.
++# Specifies if a 2MHz primary channel is being used.
 +# 0 = 1MHz primary
 +# 1 = 2MHz primary
 +#s1g_primary_2mhz=1
 +
-+# S1G primary channel location
-+# Specifies the location of the 1MHz primary subchannel when a 2MHz primary
-+# channel is in use
-+# 0 = lower 1MHz
-+# 1 = upper 1MHz
-+# s1g_pri_loc=0
- 
  ##### IEEE 802.1X-2004 related configuration ##################################
  
+ # Require IEEE 802.1X authorization
+-- 
+2.43.0
+

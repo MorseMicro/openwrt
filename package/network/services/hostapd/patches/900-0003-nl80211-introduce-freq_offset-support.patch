@@ -1,19 +1,25 @@
-From b3e95fc5868bb278e02364095bde675d5d8f7116 Mon Sep 17 00:00:00 2001
+From ed97f84b954edb3be76b2c10ba252bc9e66d8412 Mon Sep 17 00:00:00 2001
 From: Lachlan Hodges <lachlan.hodges@morsemicro.com>
 Date: Mon, 27 Oct 2025 10:54:23 +1100
-Subject: [PATCH 3/8] nl80211: introduce freq_offset support
+Subject: [PATCH 3/9] nl80211: introduce freq_offset support
 
+Introduce the ability to handle S1G channels by introducing the
+`freq_offset` parameter to the nl80211 driver to handle S1G channels.
+
+Signed-off-by: Lachlan Hodges <lachlan.hodges@morsemicro.com>
 ---
- src/drivers/driver_nl80211.c       | 106 ++++++++++++++++++++---------
+ src/drivers/driver_nl80211.c       | 111 ++++++++++++++++++++---------
  src/drivers/driver_nl80211.h       |   3 +
  src/drivers/driver_nl80211_capa.c  |  30 +++++---
  src/drivers/driver_nl80211_event.c |  26 ++++---
  src/drivers/driver_nl80211_scan.c  |  34 ++++++---
- 5 files changed, 141 insertions(+), 58 deletions(-)
+ 5 files changed, 146 insertions(+), 58 deletions(-)
 
+diff --git a/src/drivers/driver_nl80211.c b/src/drivers/driver_nl80211.c
+index 37530d4ff..43ca2edce 100644
 --- a/src/drivers/driver_nl80211.c
 +++ b/src/drivers/driver_nl80211.c
-@@ -177,7 +177,8 @@ wpa_driver_nl80211_finish_drv_init(struc
+@@ -177,7 +177,8 @@ wpa_driver_nl80211_finish_drv_init(struct wpa_driver_nl80211_data *drv,
  				   const u8 *set_addr, int first,
  				   const char *driver_params);
  static int nl80211_send_frame_cmd(struct i802_bss *bss,
@@ -23,7 +29,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  				  const u8 *buf, size_t buf_len,
  				  int save_cookie, int no_cck, int no_ack,
  				  int offchanok, const u16 *csa_offs,
-@@ -1554,6 +1555,7 @@ static void wpa_driver_nl80211_event_rtm
+@@ -1554,6 +1555,7 @@ static void wpa_driver_nl80211_event_rtm_dellink(void *ctx,
  struct nl80211_get_assoc_freq_arg {
  	struct wpa_driver_nl80211_data *drv;
  	unsigned int assoc_freq;
@@ -31,7 +37,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  	unsigned int ibss_freq;
  	u8 assoc_bssid[ETH_ALEN];
  	u8 assoc_ssid[SSID_MAX_LEN];
-@@ -1605,8 +1607,12 @@ static int nl80211_get_assoc_freq_handle
+@@ -1605,8 +1607,12 @@ static int nl80211_get_assoc_freq_handler(struct nl_msg *msg, void *arg)
  		if (!drv->sta_mlo_info.valid_links ||
  		    drv->sta_mlo_info.assoc_link_id == link_id) {
  			ctx->assoc_freq = freq;
@@ -82,7 +88,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  	if (params->ssid) {
  		wpa_printf(MSG_DEBUG, "  * SSID=%s",
  			   wpa_ssid_txt(params->ssid, params->ssid_len));
-@@ -4246,14 +4261,14 @@ u8 nl80211_get_link_id_from_link(struct
+@@ -4246,14 +4261,14 @@ u8 nl80211_get_link_id_from_link(struct i802_bss *bss, struct i802_link *link)
  }
  
  
@@ -99,7 +105,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  static int nl80211_get_link_freq(struct i802_bss *bss, const u8 *addr,
  				 bool bss_freq_debug)
  {
-@@ -4279,8 +4294,8 @@ static int nl80211_get_link_freq(struct
+@@ -4279,8 +4294,8 @@ static int nl80211_get_link_freq(struct i802_bss *bss, const u8 *addr,
  
  static int wpa_driver_nl80211_send_mlme(struct i802_bss *bss, const u8 *data,
  					size_t data_len, int noack,
@@ -110,7 +116,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  					unsigned int wait_time,
  					const u16 *csa_offs,
  					size_t csa_offs_len, int no_encrypt,
-@@ -4313,9 +4328,10 @@ static int wpa_driver_nl80211_send_mlme(
+@@ -4313,9 +4328,10 @@ static int wpa_driver_nl80211_send_mlme(struct i802_bss *bss, const u8 *data,
  		 * of wpa_supplicant.
  		 */
  		if (freq == 0) {
@@ -123,7 +129,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  		}
  		wait_time = 0;
  		use_cookie = 0;
-@@ -4327,9 +4343,13 @@ static int wpa_driver_nl80211_send_mlme(
+@@ -4327,9 +4343,13 @@ static int wpa_driver_nl80211_send_mlme(struct i802_bss *bss, const u8 *data,
  	if (drv->device_ap_sme && is_ap_interface(drv->nlmode)) {
  		unsigned int link_freq = nl80211_get_link_freq(bss, mgmt->sa,
  							       !freq);
@@ -138,7 +144,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  
  		if (freq == link_freq)
  			wait_time = 0;
-@@ -4358,9 +4378,10 @@ static int wpa_driver_nl80211_send_mlme(
+@@ -4358,9 +4378,10 @@ static int wpa_driver_nl80211_send_mlme(struct i802_bss *bss, const u8 *data,
  		    (drv->capa.flags & WPA_DRIVER_FLAGS_SAE) &&
  		    !(drv->capa.flags & WPA_DRIVER_FLAGS_SME)) {
  			freq = nl80211_get_assoc_freq(drv);
@@ -151,7 +157,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  		}
  
  		/* Allow off channel for PASN authentication */
-@@ -4393,9 +4414,10 @@ static int wpa_driver_nl80211_send_mlme(
+@@ -4393,9 +4414,10 @@ static int wpa_driver_nl80211_send_mlme(struct i802_bss *bss, const u8 *data,
  			   freq);
  	}
  	if (freq == 0) {
@@ -173,7 +179,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  				     use_cookie, no_cck, noack, offchanok,
  				     csa_offs, csa_offs_len, link_id);
  	if (!res)
-@@ -4986,6 +5008,9 @@ static int nl80211_put_freq_params(struc
+@@ -4986,6 +5008,9 @@ static int nl80211_put_freq_params(struct nl_msg *msg,
  	wpa_printf(MSG_DEBUG, "  * freq=%d", freq->freq);
  	if (nla_put_u32(msg, NL80211_ATTR_WIPHY_FREQ, freq->freq))
  		return -ENOBUFS;
@@ -183,16 +189,21 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  
  	wpa_printf(MSG_DEBUG, "  * eht_enabled=%d", freq->eht_enabled);
  	wpa_printf(MSG_DEBUG, "  * he_enabled=%d", freq->he_enabled);
-@@ -5157,7 +5182,7 @@ static int wpa_driver_nl80211_set_ap(voi
+@@ -5147,6 +5172,13 @@ static int wpa_driver_nl80211_set_ap(void *priv,
+ 	    nla_put(msg, NL80211_ATTR_SSID, params->ssid_len, params->ssid))
+ 		goto fail;
  
- 		if (params->freq)
- 			nl80211_link_set_freq(bss, params->mld_link_id,
--					      params->freq->freq);
-+					      params->freq->freq, params->freq->freq_offset);
- 	}
- 
- 	if (params->proberesp && params->proberesp_len) {
-@@ -5528,10 +5553,10 @@ static int nl80211_set_channel(struct i8
++	if (params->freq)
++		nl80211_link_set_freq(bss,
++				      params->mld_ap ? params->mld_link_id :
++				      NL80211_DRV_LINK_ID_NA,
++				      params->freq->freq,
++				      params->freq->freq_offset);
++
+ 	if (params->mld_ap) {
+ 		wpa_printf(MSG_DEBUG, "nl80211: link_id=%u",
+ 			   params->mld_link_id);
+@@ -5528,10 +5560,10 @@ static int nl80211_set_channel(struct i802_bss *bss,
  	int ret;
  
  	wpa_printf(MSG_DEBUG,
@@ -202,11 +213,11 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
 +		   freq->freq, freq->freq_offset, freq->ht_enabled, freq->vht_enabled,
  		   freq->he_enabled, freq->eht_enabled, freq->bandwidth,
 -		   freq->center_freq1, freq->center_freq2);
-+ 		   freq->center_freq1, freq->center_freq1_offset, freq->center_freq2);
++		   freq->center_freq1, freq->center_freq1_offset, freq->center_freq2);
  
  	msg = nl80211_bss_msg(bss, 0, set_chan ? NL80211_CMD_SET_CHANNEL :
  			      NL80211_CMD_SET_WIPHY);
-@@ -5552,7 +5577,7 @@ static int nl80211_set_channel(struct i8
+@@ -5552,7 +5584,7 @@ static int nl80211_set_channel(struct i802_bss *bss,
  
  	ret = send_and_recv_cmd(drv, msg);
  	if (ret == 0) {
@@ -215,23 +226,27 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  		return 0;
  	}
  	wpa_printf(MSG_DEBUG, "nl80211: Failed to set channel (freq=%d): "
-@@ -6860,6 +6885,15 @@ static int nl80211_connect_common(struct
- 	} else
- 		drv->assoc_freq = 0;
- 
-+	if (params->freq.freq_offset && !params->mld_params.mld_addr) {
-+		wpa_printf(MSG_DEBUG, "  * freq_offset=%d",
-+			params->freq.freq_offset);
-+		if (nla_put_u32(msg, NL80211_ATTR_WIPHY_FREQ_OFFSET,
-+				params->freq.freq_offset))
-+			return -1;
-+		drv->assoc_freq_offset = params->freq.freq_offset;
-+	}
+@@ -6857,8 +6889,17 @@ static int nl80211_connect_common(struct wpa_driver_nl80211_data *drv,
+ 				params->freq.freq))
+ 			return -1;
+ 		drv->assoc_freq = params->freq.freq;
+-	} else
+-		drv->assoc_freq = 0;
 +
++		if (params->freq.freq_offset && !params->mld_params.mld_addr) {
++			wpa_printf(MSG_DEBUG, "  * freq_offset=%d",
++				params->freq.freq_offset);
++			if (nla_put_u32(msg, NL80211_ATTR_WIPHY_FREQ_OFFSET,
++					params->freq.freq_offset))
++				return -1;
++
++			drv->assoc_freq_offset = params->freq.freq_offset;
++		}
++	}
+ 
  	if (params->freq_hint) {
  		wpa_printf(MSG_DEBUG, "  * freq_hint=%d", params->freq_hint);
- 		if (nla_put_u32(msg, NL80211_ATTR_WIPHY_FREQ_HINT,
-@@ -8418,7 +8452,7 @@ static int i802_sta_deauth(void *priv, c
+@@ -8418,7 +8459,7 @@ static int i802_sta_deauth(void *priv, const u8 *own_addr, const u8 *addr,
  	return wpa_driver_nl80211_send_mlme(bss, (u8 *) &mgmt,
  					    IEEE80211_HDRLEN +
  					    sizeof(mgmt.u.deauth), 0, 0, 0, 0,
@@ -240,7 +255,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  }
  
  
-@@ -8445,7 +8479,7 @@ static int i802_sta_disassoc(void *priv,
+@@ -8445,7 +8486,7 @@ static int i802_sta_disassoc(void *priv, const u8 *own_addr, const u8 *addr,
  	return wpa_driver_nl80211_send_mlme(bss, (u8 *) &mgmt,
  					    IEEE80211_HDRLEN +
  					    sizeof(mgmt.u.disassoc), 0, 0, 0, 0,
@@ -249,7 +264,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  }
  
  
-@@ -9213,7 +9247,8 @@ static int cookie_handler(struct nl_msg
+@@ -9213,7 +9254,8 @@ static int cookie_handler(struct nl_msg *msg, void *arg)
  
  
  static int nl80211_send_frame_cmd(struct i802_bss *bss,
@@ -259,7 +274,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  				  const u8 *buf, size_t buf_len,
  				  int save_cookie, int no_cck, int no_ack,
  				  int offchanok, const u16 *csa_offs,
-@@ -9224,15 +9259,16 @@ static int nl80211_send_frame_cmd(struct
+@@ -9224,15 +9266,16 @@ static int nl80211_send_frame_cmd(struct i802_bss *bss,
  	u64 cookie;
  	int ret = -1;
  
@@ -278,7 +293,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  	    (wait && nla_put_u32(msg, NL80211_ATTR_DURATION, wait)) ||
  	    (offchanok && ((drv->capa.flags & WPA_DRIVER_FLAGS_OFFCHANNEL_TX) ||
  			   drv->test_use_roc_tx) &&
-@@ -9358,10 +9394,10 @@ static int wpa_driver_nl80211_send_actio
+@@ -9358,10 +9401,10 @@ static int wpa_driver_nl80211_send_action(struct i802_bss *bss,
  	     (int) freq == bss->flink->freq || drv->device_ap_sme ||
  	     !drv->use_monitor))
  		ret = wpa_driver_nl80211_send_mlme(bss, buf, 24 + data_len,
@@ -291,7 +306,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  					     24 + data_len, 1, no_cck, 0,
  					     offchanok, NULL, 0,
  					     NL80211_DRV_LINK_ID_NA);
-@@ -10539,7 +10575,7 @@ static void nl80211_send_null_frame(stru
+@@ -10539,7 +10582,7 @@ static void nl80211_send_null_frame(struct i802_bss *bss, const u8 *own_addr,
  	os_memcpy(nulldata.hdr.IEEE80211_SA_FROMDS, own_addr, ETH_ALEN);
  
  	if (wpa_driver_nl80211_send_mlme(bss, (u8 *) &nulldata, size, 0, 0, 0,
@@ -300,7 +315,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  		wpa_printf(MSG_DEBUG, "nl80211_send_null_frame: Failed to "
  			   "send poll frame");
  }
-@@ -11054,7 +11090,7 @@ static int driver_nl80211_send_mlme(void
+@@ -11054,7 +11097,7 @@ static int driver_nl80211_send_mlme(void *priv, const u8 *data,
  {
  	struct i802_bss *bss = priv;
  	return wpa_driver_nl80211_send_mlme(bss, data, data_len, noack,
@@ -309,6 +324,8 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  					    csa_offs_len, no_encrypt, link_id);
  }
  
+diff --git a/src/drivers/driver_nl80211.h b/src/drivers/driver_nl80211.h
+index 40941ea7d..24d288692 100644
 --- a/src/drivers/driver_nl80211.h
 +++ b/src/drivers/driver_nl80211.h
 @@ -56,6 +56,7 @@ struct i802_link {
@@ -335,9 +352,11 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  
  	struct wpa_driver_scan_filter *filter_ssids;
  	size_t num_filter_ssids;
+diff --git a/src/drivers/driver_nl80211_capa.c b/src/drivers/driver_nl80211_capa.c
+index 2e39d31d4..c340282a5 100644
 --- a/src/drivers/driver_nl80211_capa.c
 +++ b/src/drivers/driver_nl80211_capa.c
-@@ -1697,6 +1697,7 @@ static void phy_info_freq(struct hostapd
+@@ -1697,6 +1697,7 @@ static void phy_info_freq(struct hostapd_hw_modes *mode,
  
  	os_memset(chan, 0, sizeof(*chan));
  	chan->freq = nla_get_u32(tb_freq[NL80211_FREQUENCY_ATTR_FREQ]);
@@ -345,7 +364,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  	chan->flag = 0;
  	chan->allowed_bw = ~0;
  	chan->dfs_cac_ms = 0;
-@@ -2669,14 +2670,27 @@ static void nl80211_dump_chan_list(struc
+@@ -2669,14 +2670,27 @@ static void nl80211_dump_chan_list(struct wpa_driver_nl80211_data *drv,
  				drv->uses_6ghz = true;
  			if (chan->freq >= 900 && chan->freq < 1000)
  				drv->uses_s1g = true;
@@ -367,7 +386,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
 +						(chan->flag & HOSTAPD_CHAN_NO_IR) ?
 +						"[NO_IR]" : "");
 +			} else {
-+				/* For normal operation, print in MHz + offset info */
++				/* For normal operation, print frequency in MHz */
 +				res = os_snprintf(pos, end - pos, " %d%s%s%s",
 +						chan->freq,
 +						(chan->flag & HOSTAPD_CHAN_DISABLED) ?
@@ -381,9 +400,11 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  			if (os_snprintf_error(end - pos, res))
  				break;
  			pos += res;
+diff --git a/src/drivers/driver_nl80211_event.c b/src/drivers/driver_nl80211_event.c
+index f642e99b6..487b99dc4 100644
 --- a/src/drivers/driver_nl80211_event.c
 +++ b/src/drivers/driver_nl80211_event.c
-@@ -1040,7 +1040,9 @@ static void mlme_event_connect(struct wp
+@@ -1040,7 +1040,9 @@ static void mlme_event_connect(struct wpa_driver_nl80211_data *drv,
  	}
  
  	event.assoc_info.freq = nl80211_get_assoc_freq(drv);
@@ -393,7 +414,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  
  	if ((!ssid || ssid[1] == 0 || ssid[1] > 32) &&
  	    (ssid_len = nl80211_get_assoc_ssid(drv, drv->ssid)) > 0) {
-@@ -1348,8 +1350,8 @@ static void mlme_timeout_event(struct wp
+@@ -1348,8 +1350,8 @@ static void mlme_timeout_event(struct wpa_driver_nl80211_data *drv,
  
  
  static void mlme_event_mgmt(struct i802_bss *bss,
@@ -404,7 +425,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  			    int link_id)
  {
  	struct wpa_driver_nl80211_data *drv = bss->drv;
-@@ -1358,6 +1360,7 @@ static void mlme_event_mgmt(struct i802_
+@@ -1358,6 +1360,7 @@ static void mlme_event_mgmt(struct i802_bss *bss,
  	u16 fc, stype;
  	int ssi_signal = 0;
  	int rx_freq = 0;
@@ -412,7 +433,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  
  	wpa_printf(MSG_MSGDUMP, "nl80211: Frame event");
  	mgmt = (const struct ieee80211_mgmt *) frame;
-@@ -1375,13 +1378,15 @@ static void mlme_event_mgmt(struct i802_
+@@ -1375,13 +1378,15 @@ static void mlme_event_mgmt(struct i802_bss *bss,
  	os_memset(&event, 0, sizeof(event));
  	if (freq) {
  		event.rx_mgmt.freq = nla_get_u32(freq);
@@ -430,7 +451,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  		   le_to_host16(mgmt->seq_ctrl), stype, fc2str(fc),
  		   (unsigned int) len);
  	event.rx_mgmt.frame = frame;
-@@ -1659,7 +1664,8 @@ nl80211_get_link_id_by_freq(struct i802_
+@@ -1659,7 +1664,8 @@ nl80211_get_link_id_by_freq(struct i802_bss *bss, unsigned int freq)
  static void mlme_event(struct i802_bss *bss,
  		       enum nl80211_commands cmd, struct nlattr *frame,
  		       struct nlattr *addr, struct nlattr *timed_out,
@@ -440,7 +461,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  		       struct nlattr *cookie, struct nlattr *sig,
  		       struct nlattr *wmm, struct nlattr *req_ie,
  		       struct nlattr *link)
-@@ -1760,7 +1766,7 @@ static void mlme_event(struct i802_bss *
+@@ -1760,7 +1766,7 @@ static void mlme_event(struct i802_bss *bss,
  					   nla_data(frame), nla_len(frame));
  		break;
  	case NL80211_CMD_FRAME:
@@ -449,7 +470,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  				nla_len(frame), link_id);
  		break;
  	case NL80211_CMD_FRAME_TX_STATUS:
-@@ -4023,7 +4029,9 @@ static void do_process_drv_event(struct
+@@ -4023,7 +4029,9 @@ static void do_process_drv_event(struct i802_bss *bss, int cmd,
  	case NL80211_CMD_UNPROT_DISASSOCIATE:
  		mlme_event(bss, cmd, tb[NL80211_ATTR_FRAME],
  			   tb[NL80211_ATTR_MAC], tb[NL80211_ATTR_TIMED_OUT],
@@ -460,7 +481,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  			   tb[NL80211_ATTR_COOKIE],
  			   tb[NL80211_ATTR_RX_SIGNAL_DBM],
  			   tb[NL80211_ATTR_STA_WME],
-@@ -4313,7 +4321,9 @@ int process_bss_event(struct nl_msg *msg
+@@ -4313,7 +4321,9 @@ int process_bss_event(struct nl_msg *msg, void *arg)
  	case NL80211_CMD_FRAME_TX_STATUS:
  		mlme_event(bss, gnlh->cmd, tb[NL80211_ATTR_FRAME],
  			   tb[NL80211_ATTR_MAC], tb[NL80211_ATTR_TIMED_OUT],
@@ -471,9 +492,11 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  			   tb[NL80211_ATTR_COOKIE],
  			   tb[NL80211_ATTR_RX_SIGNAL_DBM],
  			   tb[NL80211_ATTR_STA_WME], NULL,
+diff --git a/src/drivers/driver_nl80211_scan.c b/src/drivers/driver_nl80211_scan.c
+index 92b4c30d8..fdebc9618 100644
 --- a/src/drivers/driver_nl80211_scan.c
 +++ b/src/drivers/driver_nl80211_scan.c
-@@ -245,16 +245,31 @@ nl80211_scan_common(struct i802_bss *bss
+@@ -245,16 +245,31 @@ nl80211_scan_common(struct i802_bss *bss, u8 cmd,
  
  	if (params->freqs) {
  		struct nlattr *freqs;
@@ -489,7 +512,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
 +		if (params->freq_offset) {
 +			freqs = nla_nest_start(msg, NL80211_ATTR_SCAN_FREQ_KHZ);
 +			if (freqs == NULL)
- 				goto fail;
++				goto fail;
 +			for (; params->freqs[i]; i++) {
 +				wpa_printf(MSG_MSGDUMP, "nl80211: Scan frequency %u "
 +					"KHz", MHZ_TO_KHZ(params->freqs[i]) + params->freq_offset);
@@ -499,8 +522,8 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
 +			nla_nest_end(msg, freqs);
 +		} else {
 +			freqs = nla_nest_start(msg, NL80211_ATTR_SCAN_FREQUENCIES);
-+			if (freqs == NULL) 
-+				goto fail;
++			if (freqs == NULL)
+ 				goto fail;
 +			for (; params->freqs[i]; i++) {
 +				wpa_printf(MSG_MSGDUMP, "nl80211: Scan frequency %u "
 +					"MHz", params->freqs[i]);
@@ -513,7 +536,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  	}
  
  	os_free(drv->filter_ssids);
-@@ -801,6 +816,7 @@ nl80211_parse_bss_info(struct wpa_driver
+@@ -801,6 +816,7 @@ nl80211_parse_bss_info(struct wpa_driver_nl80211_data *drv,
  		[NL80211_BSS_PARENT_TSF] = { .type = NLA_U64 },
  		[NL80211_BSS_PARENT_BSSID] = { .type = NLA_UNSPEC },
  		[NL80211_BSS_LAST_SEEN_BOOTTIME] = { .type = NLA_U64 },
@@ -521,7 +544,7 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  	};
  	struct wpa_scan_res *r;
  	const u8 *ie, *beacon_ie;
-@@ -844,6 +860,8 @@ nl80211_parse_bss_info(struct wpa_driver
+@@ -844,6 +860,8 @@ nl80211_parse_bss_info(struct wpa_driver_nl80211_data *drv,
  			  ETH_ALEN);
  	if (bss[NL80211_BSS_FREQUENCY])
  		r->freq = nla_get_u32(bss[NL80211_BSS_FREQUENCY]);
@@ -530,3 +553,6 @@ Subject: [PATCH 3/8] nl80211: introduce freq_offset support
  	if (bss[NL80211_BSS_BEACON_INTERVAL])
  		r->beacon_int = nla_get_u16(bss[NL80211_BSS_BEACON_INTERVAL]);
  	if (bss[NL80211_BSS_CAPABILITY])
+-- 
+2.43.0
+

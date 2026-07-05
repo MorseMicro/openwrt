@@ -1,15 +1,38 @@
-From 810bf68119e049c69576204bce8376c30a6e1e16 Mon Sep 17 00:00:00 2001
-From: Lachlan Hodges <lachlan.hodges@morsemicro.com>
-Date: Mon, 27 Oct 2025 10:51:15 +1100
-Subject: [PATCH 1/8] nl80211: update nl80211_copy
+From 4e3fbf52e7774bac30ed1d3979b4b8ff8b91a187 Mon Sep 17 00:00:00 2001
+From: Arien Judge <arien.judge@morsemicro.com>
+Date: Mon, 6 Jul 2026 03:15:10 +1000
+Subject: [PATCH 1/9] nl80211: update nl80211_copy
 
+Signed-off-by: Arien Judge <arien.judge@morsemicro.com>
 ---
- src/drivers/nl80211_copy.h | 316 ++++++++++++++++++++++++++++++++++++-
- 1 file changed, 310 insertions(+), 6 deletions(-)
+ src/drivers/nl80211_copy.h | 137 ++++++++++++++++++++++++++++++-------
+ 1 file changed, 113 insertions(+), 24 deletions(-)
 
+diff --git a/src/drivers/nl80211_copy.h b/src/drivers/nl80211_copy.h
+index f97f5adc8..81f16cd28 100644
 --- a/src/drivers/nl80211_copy.h
 +++ b/src/drivers/nl80211_copy.h
-@@ -2265,7 +2265,8 @@ enum nl80211_commands {
+@@ -1329,6 +1329,10 @@
+  *      %NL80211_ATTR_MLO_TTLM_ULINK attributes are used to specify the
+  *      TID to Link mapping for downlink/uplink traffic.
+  *
++ * @NL80211_CMD_SET_S1G_RI: This command is used to enable and set the
++ *	response indication type for an S1G station. The frame type is
++ *	indicated by %NL80211_ATTR_S1G_RI_FRAME_TYPE.
++ *
+  * @NL80211_CMD_MAX: highest used command number
+  * @__NL80211_CMD_AFTER_LAST: internal use
+  */
+@@ -1586,6 +1590,8 @@ enum nl80211_commands {
+ 
+ 	NL80211_CMD_SET_TID_TO_LINK_MAPPING,
+ 
++	NL80211_CMD_SET_S1G_RI,
++
+ 	/* add new commands above here */
+ 
+ 	/* used to define NL80211_CMD_MAX below */
+@@ -2265,7 +2271,8 @@ enum nl80211_commands {
   * @NL80211_ATTR_PEER_AID: Association ID for the peer TDLS station (u16).
   *	This is similar to @NL80211_ATTR_STA_AID but with a difference of being
   *	allowed to be used with the first @NL80211_CMD_SET_STATION command to
@@ -19,7 +42,7 @@ Subject: [PATCH 1/8] nl80211: update nl80211_copy
   *
   * @NL80211_ATTR_COALESCE_RULE: Coalesce rule information.
   *
-@@ -2868,6 +2869,26 @@ enum nl80211_commands {
+@@ -2868,6 +2875,32 @@ enum nl80211_commands {
   *	nested item, it contains attributes defined in
   *	&enum nl80211_if_combination_attrs.
   *
@@ -43,10 +66,16 @@ Subject: [PATCH 1/8] nl80211: update nl80211_copy
 + *	primary channel is 2 MHz wide, and the control channel designates
 + *	the 1 MHz primary subchannel within that 2 MHz primary.
 + *
++ * @NL80211_ATTR_S1G_RI_FRAME_TYPE: (u8) Integer attibute used with
++ *	%NL80211_CMD_SET_S1G_RI that represents the RID
++ *	(Response Indication Deferral) information distributed by
++ *	an S1G STA in order to protect the response frame, which is
++ *	expected a SIFS time after the frame that elicits that response.
++ *
   * @NUM_NL80211_ATTR: total number of nl80211_attrs available
   * @NL80211_ATTR_MAX: highest attribute number currently defined
   * @__NL80211_ATTR_AFTER_LAST: internal use
-@@ -3416,6 +3437,13 @@ enum nl80211_attrs {
+@@ -3416,6 +3449,15 @@ enum nl80211_attrs {
  	NL80211_ATTR_WIPHY_RADIOS,
  	NL80211_ATTR_WIPHY_INTERFACE_COMBINATIONS,
  
@@ -57,33 +86,100 @@ Subject: [PATCH 1/8] nl80211: update nl80211_copy
 +
 +	NL80211_ATTR_S1G_PRIMARY_2MHZ,
 +
++	NL80211_ATTR_S1G_RI_FRAME_TYPE,
++
  	/* add attributes here, update the policy in nl80211.c */
  
  	__NL80211_ATTR_AFTER_LAST,
-@@ -4294,6 +4322,12 @@ enum nl80211_wmm_rule {
+@@ -4294,6 +4336,17 @@ enum nl80211_wmm_rule {
   *	otherwise completely disabled.
   * @NL80211_FREQUENCY_ATTR_ALLOW_6GHZ_VLP_AP: This channel can be used for a
   *	very low power (VLP) AP, despite being NO_IR.
++ * @NL80211_FREQUENCY_ATTR_ALLOW_20MHZ_ACTIVITY: This channel can be active in
++ *	20 MHz bandwidth, despite being NO_IR.
 + * @NL80211_FREQUENCY_ATTR_NO_4MHZ: 4 MHz operation is not allowed on this
 + *	channel in current regulatory domain.
 + * @NL80211_FREQUENCY_ATTR_NO_8MHZ: 8 MHz operation is not allowed on this
 + *	channel in current regulatory domain.
 + * @NL80211_FREQUENCY_ATTR_NO_16MHZ: 16 MHz operation is not allowed on this
 + *	channel in current regulatory domain.
++ * @NL80211_FREQUENCY_ATTR_S1G_NO_PRIMARY: Channel is not permitted for use
++ *	as a primary channel. Does not prevent the channel from existing
++ *	as a non-primary subchannel. Only applicable to S1G channels.
   * @NL80211_FREQUENCY_ATTR_MAX: highest frequency attribute number
   *	currently defined
   * @__NL80211_FREQUENCY_ATTR_AFTER_LAST: internal use
-@@ -4338,6 +4372,9 @@ enum nl80211_frequency_attr {
+@@ -4338,6 +4391,11 @@ enum nl80211_frequency_attr {
  	NL80211_FREQUENCY_ATTR_NO_6GHZ_AFC_CLIENT,
  	NL80211_FREQUENCY_ATTR_CAN_MONITOR,
  	NL80211_FREQUENCY_ATTR_ALLOW_6GHZ_VLP_AP,
++	NL80211_FREQUENCY_ATTR_ALLOW_20MHZ_ACTIVITY,
 +	NL80211_FREQUENCY_ATTR_NO_4MHZ,
 +	NL80211_FREQUENCY_ATTR_NO_8MHZ,
 +	NL80211_FREQUENCY_ATTR_NO_16MHZ,
++	NL80211_FREQUENCY_ATTR_S1G_NO_PRIMARY,
  
  	/* keep last */
  	__NL80211_FREQUENCY_ATTR_AFTER_LAST,
-@@ -4698,6 +4735,7 @@ enum nl80211_survey_info {
+@@ -4549,31 +4607,34 @@ enum nl80211_sched_scan_match_attr {
+  * @NL80211_RRF_NO_6GHZ_AFC_CLIENT: Client connection to AFC AP not allowed
+  * @NL80211_RRF_ALLOW_6GHZ_VLP_AP: Very low power (VLP) AP can be permitted
+  *	despite NO_IR configuration.
++ * @NL80211_RRF_ALLOW_20MHZ_ACTIVITY: Allow activity in 20 MHz bandwidth,
++ *	despite NO_IR configuration.
+  */
+ enum nl80211_reg_rule_flags {
+-	NL80211_RRF_NO_OFDM		= 1<<0,
+-	NL80211_RRF_NO_CCK		= 1<<1,
+-	NL80211_RRF_NO_INDOOR		= 1<<2,
+-	NL80211_RRF_NO_OUTDOOR		= 1<<3,
+-	NL80211_RRF_DFS			= 1<<4,
+-	NL80211_RRF_PTP_ONLY		= 1<<5,
+-	NL80211_RRF_PTMP_ONLY		= 1<<6,
+-	NL80211_RRF_NO_IR		= 1<<7,
+-	__NL80211_RRF_NO_IBSS		= 1<<8,
+-	NL80211_RRF_AUTO_BW		= 1<<11,
+-	NL80211_RRF_IR_CONCURRENT	= 1<<12,
+-	NL80211_RRF_NO_HT40MINUS	= 1<<13,
+-	NL80211_RRF_NO_HT40PLUS		= 1<<14,
+-	NL80211_RRF_NO_80MHZ		= 1<<15,
+-	NL80211_RRF_NO_160MHZ		= 1<<16,
+-	NL80211_RRF_NO_HE		= 1<<17,
+-	NL80211_RRF_NO_320MHZ		= 1<<18,
+-	NL80211_RRF_NO_EHT		= 1<<19,
+-	NL80211_RRF_PSD			= 1<<20,
+-	NL80211_RRF_DFS_CONCURRENT	= 1<<21,
+-	NL80211_RRF_NO_6GHZ_VLP_CLIENT	= 1<<22,
+-	NL80211_RRF_NO_6GHZ_AFC_CLIENT	= 1<<23,
+-	NL80211_RRF_ALLOW_6GHZ_VLP_AP	= 1<<24,
++	NL80211_RRF_NO_OFDM                 = 1 << 0,
++	NL80211_RRF_NO_CCK                  = 1 << 1,
++	NL80211_RRF_NO_INDOOR               = 1 << 2,
++	NL80211_RRF_NO_OUTDOOR              = 1 << 3,
++	NL80211_RRF_DFS                     = 1 << 4,
++	NL80211_RRF_PTP_ONLY                = 1 << 5,
++	NL80211_RRF_PTMP_ONLY               = 1 << 6,
++	NL80211_RRF_NO_IR                   = 1 << 7,
++	__NL80211_RRF_NO_IBSS               = 1 << 8,
++	NL80211_RRF_AUTO_BW                 = 1 << 11,
++	NL80211_RRF_IR_CONCURRENT           = 1 << 12,
++	NL80211_RRF_NO_HT40MINUS            = 1 << 13,
++	NL80211_RRF_NO_HT40PLUS             = 1 << 14,
++	NL80211_RRF_NO_80MHZ                = 1 << 15,
++	NL80211_RRF_NO_160MHZ               = 1 << 16,
++	NL80211_RRF_NO_HE                   = 1 << 17,
++	NL80211_RRF_NO_320MHZ               = 1 << 18,
++	NL80211_RRF_NO_EHT                  = 1 << 19,
++	NL80211_RRF_PSD                     = 1 << 20,
++	NL80211_RRF_DFS_CONCURRENT          = 1 << 21,
++	NL80211_RRF_NO_6GHZ_VLP_CLIENT      = 1 << 22,
++	NL80211_RRF_NO_6GHZ_AFC_CLIENT      = 1 << 23,
++	NL80211_RRF_ALLOW_6GHZ_VLP_AP       = 1 << 24,
++	NL80211_RRF_ALLOW_20MHZ_ACTIVITY    = 1 << 25,
+ };
+ 
+ #define NL80211_RRF_PASSIVE_SCAN	NL80211_RRF_NO_IR
+@@ -4698,6 +4759,7 @@ enum nl80211_survey_info {
   *	overrides all other flags.
   * @NL80211_MNTR_FLAG_ACTIVE: use the configured MAC address
   *	and ACK incoming unicast packets.
@@ -91,7 +187,7 @@ Subject: [PATCH 1/8] nl80211: update nl80211_copy
   *
   * @__NL80211_MNTR_FLAG_AFTER_LAST: internal use
   * @NL80211_MNTR_FLAG_MAX: highest possible monitor flag
-@@ -4710,6 +4748,7 @@ enum nl80211_mntr_flags {
+@@ -4710,6 +4772,7 @@ enum nl80211_mntr_flags {
  	NL80211_MNTR_FLAG_OTHER_BSS,
  	NL80211_MNTR_FLAG_COOK_FRAMES,
  	NL80211_MNTR_FLAG_ACTIVE,
@@ -99,7 +195,7 @@ Subject: [PATCH 1/8] nl80211: update nl80211_copy
  
  	/* keep last */
  	__NL80211_MNTR_FLAG_AFTER_LAST,
-@@ -8031,6 +8070,8 @@ enum nl80211_ap_settings_flags {
+@@ -8031,6 +8094,8 @@ enum nl80211_ap_settings_flags {
   * @NL80211_WIPHY_RADIO_ATTR_INTERFACE_COMBINATION: Supported interface
   *	combination for this radio. Attribute may be present multiple times
   *	and contains attributes defined in &enum nl80211_if_combination_attrs.
@@ -108,7 +204,7 @@ Subject: [PATCH 1/8] nl80211: update nl80211_copy
   *
   * @__NL80211_WIPHY_RADIO_ATTR_LAST: Internal
   * @NL80211_WIPHY_RADIO_ATTR_MAX: Highest attribute
-@@ -8041,6 +8082,7 @@ enum nl80211_wiphy_radio_attrs {
+@@ -8041,6 +8106,7 @@ enum nl80211_wiphy_radio_attrs {
  	NL80211_WIPHY_RADIO_ATTR_INDEX,
  	NL80211_WIPHY_RADIO_ATTR_FREQ_RANGE,
  	NL80211_WIPHY_RADIO_ATTR_INTERFACE_COMBINATION,
@@ -116,7 +212,7 @@ Subject: [PATCH 1/8] nl80211: update nl80211_copy
  
  	/* keep last */
  	__NL80211_WIPHY_RADIO_ATTR_LAST,
-@@ -8070,4 +8112,27 @@ enum nl80211_wiphy_radio_freq_range {
+@@ -8070,4 +8136,27 @@ enum nl80211_wiphy_radio_freq_range {
  	NL80211_WIPHY_RADIO_FREQ_ATTR_MAX = __NL80211_WIPHY_RADIO_FREQ_ATTR_LAST - 1,
  };
  
@@ -144,3 +240,6 @@ Subject: [PATCH 1/8] nl80211: update nl80211_copy
 +};
 +
  #endif /* __LINUX_NL80211_H */
+-- 
+2.43.0
+

@@ -579,6 +579,13 @@ uc_hostapd_iface_start(uc_vm_t *vm, size_t nargs)
 		iface->freq = intval;
 	else
 		iface->freq = 0;
+
+	intval = ucv_int64_get(ucv_object_get(info, "frequency_offset", NULL));
+	if (!errno)
+		iface->freq_offset = intval;
+	else
+		iface->freq_offset = 0;
+
 	conf->acs = 0;
 
 out:
@@ -607,7 +614,8 @@ out:
 		int ret;
 
 		hapd->conf->start_disabled = 0;
-		hostapd_set_freq(hapd, conf->hw_mode, iface->freq,
+		hostapd_set_freq(hapd, conf->hw_mode,
+				 iface->freq, iface->freq_offset,
 				 conf->channel,
 				 conf->enable_edmg,
 				 conf->edmg_channel,
@@ -615,6 +623,7 @@ out:
 				 conf->ieee80211ac,
 				 conf->ieee80211ax,
 				 conf->ieee80211be,
+				 conf->ieee80211ah,
 				 conf->secondary_channel,
 				 hostapd_get_oper_chwidth(conf),
 				 hostapd_get_oper_centr_freq_seg0_idx(conf),

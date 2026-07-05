@@ -1,23 +1,50 @@
-From f0bcd83eabc551398daf5cbf054306206a125e06 Mon Sep 17 00:00:00 2001
+From cb4baf281f70901052c6d21eb99817b0dc411cf3 Mon Sep 17 00:00:00 2001
 From: Lachlan Hodges <lachlan.hodges@morsemicro.com>
 Date: Mon, 27 Oct 2025 14:45:21 +1100
-Subject: [PATCH 8/8] tests: add S1G channel tests
+Subject: [PATCH 9/9] tests: add S1G channel tests
 
+Add a small suite of S1G tests which test various channel permutations,
+the NO_PRIMARY flag and correct AID Response element configuring and
+parsing.
+
+Signed-off-by: Lachlan Hodges <lachlan.hodges@morsemicro.com>
 ---
  tests/hwsim/example-hostapd.config        |   1 +
  tests/hwsim/example-wpa_supplicant.config |   1 +
- tests/hwsim/test_s1g.py                   | 190 ++++++++++++++++++++++
- 3 files changed, 192 insertions(+)
+ tests/hwsim/test_s1g.py                   | 245 ++++++++++++++++++++++
+ 3 files changed, 247 insertions(+)
  create mode 100644 tests/hwsim/test_s1g.py
 
+diff --git a/tests/hwsim/example-hostapd.config b/tests/hwsim/example-hostapd.config
+index 5f326da07..58ec11b95 100644
+--- a/tests/hwsim/example-hostapd.config
++++ b/tests/hwsim/example-hostapd.config
+@@ -119,3 +119,4 @@ CONFIG_WEP=y
+ CONFIG_PASN=y
+ CONFIG_AIRTIME_POLICY=y
+ CONFIG_IEEE80211BE=y
++CONFIG_IEEE80211AH=y
+diff --git a/tests/hwsim/example-wpa_supplicant.config b/tests/hwsim/example-wpa_supplicant.config
+index c69b1f9cd..64f064ee8 100644
+--- a/tests/hwsim/example-wpa_supplicant.config
++++ b/tests/hwsim/example-wpa_supplicant.config
+@@ -161,3 +161,4 @@ CONFIG_DPP2=y
+ CONFIG_DPP3=y
+ CONFIG_WEP=y
+ CONFIG_PASN=y
++CONFIG_IEEE80211AH=y
+diff --git a/tests/hwsim/test_s1g.py b/tests/hwsim/test_s1g.py
+new file mode 100644
+index 000000000..39ebe6efe
 --- /dev/null
 +++ b/tests/hwsim/test_s1g.py
-@@ -0,0 +1,190 @@
-+# Test cases for IEEE 802.11ah S1G operations
-+# Copyright (c) 2024, The hostapd contributors
+@@ -0,0 +1,245 @@
++# Test cases for IEEE 802.11ah S1G operation
++# Copyright (c) 2026 Morse Micro
 +#
 +# This software may be distributed under the terms of the BSD license.
 +# See README for more details.
++
 +import logging
 +logger = logging.getLogger()
 +import hostapd
@@ -37,13 +64,9 @@ Subject: [PATCH 8/8] tests: add S1G channel tests
 +            "ieee80211ah": "1",
 +            "channel": "41",
 +            "op_class": "70",
-+            "hw_mode": "a",
++            "hw_mode": "ah",
 +            "s1g_oper_centr_freq_idx": "40",
-+            "s1g_oper_chwidth": "2",
 +            "s1g_primary_2mhz": "1",
-+            "s1g_pri_loc": "0",
-+            "sae_pwe": "1",
-+            "ieee80211n": "0",
 +        })
 +        hapd = hostapd.add_ap(apdev[0], params)
 +        status = hapd.get_status()
@@ -74,13 +97,9 @@ Subject: [PATCH 8/8] tests: add S1G channel tests
 +            "ieee80211ah": "1",
 +            "channel": "31",
 +            "op_class": "69",
-+            "hw_mode": "a",
++            "hw_mode": "ah",
 +            "s1g_oper_centr_freq_idx": "30",
-+            "s1g_oper_chwidth": "1",
 +            "s1g_primary_2mhz": "1",
-+            "s1g_pri_loc": "1",
-+            "sae_pwe": "1",
-+            "ieee80211n": "0",
 +        })
 +        hapd = hostapd.add_ap(apdev[0], params)
 +        status = hapd.get_status()
@@ -111,13 +130,9 @@ Subject: [PATCH 8/8] tests: add S1G channel tests
 +            "ieee80211ah": "1",
 +            "channel": "29",
 +            "op_class": "69",
-+            "hw_mode": "a",
++            "hw_mode": "ah",
 +            "s1g_oper_centr_freq_idx": "30",
-+            "s1g_oper_chwidth": "1",
 +            "s1g_primary_2mhz": "1",
-+            "s1g_pri_loc": "0",
-+            "sae_pwe": "1",
-+            "ieee80211n": "0",
 +        })
 +        hapd = hostapd.add_ap(apdev[0], params)
 +        status = hapd.get_status()
@@ -146,20 +161,17 @@ Subject: [PATCH 8/8] tests: add S1G channel tests
 +        params.update({
 +            "country_code": "US",
 +            "ieee80211ah": "1",
-+            "channel": "1",
++            "channel": "5",
 +            "op_class": "69",
-+            "hw_mode": "a",
-+            "s1g_oper_centr_freq_idx": "2",
-+            "s1g_oper_chwidth": "1",
-+            "sae_pwe": "1",
-+            "ieee80211n": "0",
++            "hw_mode": "ah",
++            "s1g_oper_centr_freq_idx": "6",
 +        })
 +        hapd = hostapd.add_ap(apdev[0], params)
 +        status = hapd.get_status()
 +        if status.get("ieee80211ah") != "1":
 +            raise Exception("AP did not report IEEE 802.11ah enabled")
 +        dev[0].connect("s1g-1mhz", sae_password="s1gpass", key_mgmt="SAE",
-+                       scan_freq="902", scan_freq_offset="500", sae_pwe="1",
++                       scan_freq="904", scan_freq_offset="500", sae_pwe="1",
 +                       ieee80211w="2")
 +    except Exception as e:
 +        if isinstance(e, Exception) and str(e) == "AP startup failed":
@@ -180,20 +192,17 @@ Subject: [PATCH 8/8] tests: add S1G channel tests
 +        params.update({
 +            "country_code": "US",
 +            "ieee80211ah": "1",
-+            "channel": "1",
++            "channel": "3",
 +            "op_class": "68",
-+            "hw_mode": "a",
++            "hw_mode": "ah",
 +            "s1g_oper_centr_freq_idx": "0",
-+            "s1g_oper_chwidth": "0",
-+            "sae_pwe": "1",
-+            "ieee80211n": "0",
 +        })
 +        hapd = hostapd.add_ap(apdev[0], params)
 +        status = hapd.get_status()
 +        if status.get("ieee80211ah") != "1":
 +            raise Exception("AP did not report IEEE 802.11ah enabled")
 +        dev[0].connect("s1g-1mhz", sae_password="s1gpass", key_mgmt="SAE",
-+                       scan_freq="902", scan_freq_offset="500", sae_pwe="1",
++                       scan_freq="903", scan_freq_offset="500", sae_pwe="1",
 +                       ieee80211w="2")
 +    except Exception as e:
 +        if isinstance(e, Exception) and str(e) == "AP startup failed":
@@ -203,3 +212,78 @@ Subject: [PATCH 8/8] tests: add S1G channel tests
 +        dev[0].request("DISCONNECT")
 +        dev[0].wait_disconnected()
 +        clear_regdom(hapd, dev)
++
++def test_s1g_1mhz_no_primary(dev, apdev):
++    """S1G 1 MHz AP using 1 MHz primary that is marked as NO_PRIMARY"""
++    check_sae_capab(dev[0])
++    hapd = None
++    clear_scan_cache(apdev[0])
++    try:
++        params = hostapd.wpa3_params(ssid="s1g-1mhz", password="s1gpass")
++        params.update({
++            "country_code": "US",
++            "ieee80211ah": "1",
++            "channel": "1",
++            "op_class": "68",
++            "hw_mode": "ah",
++            "s1g_oper_centr_freq_idx": "0",
++        })
++        hapd = hostapd.add_ap(apdev[0], params, wait_enabled=False)
++        ev = hapd.wait_event(["AP-DISABLED", "AP-ENABLED"], timeout=10)
++        if not ev:
++            raise Exception("AP setup failure timed out")
++        if "AP-ENABLED" in ev:
++            raise Exception("S1G 1 MHz NO_PRIMARY channel accepted")
++    except Exception as e:
++        if isinstance(e, Exception) and str(e) == "AP startup failed":
++            raise HwsimSkip("S1G operation not supported in this environment")
++        raise
++    finally:
++        clear_regdom(hapd, dev)
++
++def test_s1g_multi_sta_aid(dev, apdev):
++    """S1G AID response is correctly built and parsed"""
++    for i in range(3):
++        check_sae_capab(dev[i])
++    hapd = None
++    clear_scan_cache(apdev[0])
++    try:
++        params = hostapd.wpa3_params(ssid="s1g-aid", password="s1gpass")
++        params.update({
++            "country_code": "US",
++            "ieee80211ah": "1",
++            "channel": "5",
++            "op_class": "69",
++            "hw_mode": "ah",
++            "s1g_oper_centr_freq_idx": "6",
++        })
++        hapd = hostapd.add_ap(apdev[0], params)
++        status = hapd.get_status()
++        if status.get("ieee80211ah") != "1":
++            raise Exception("AP did not report IEEE 802.11ah enabled")
++        for i in range(3):
++            dev[i].connect("s1g-aid", sae_password="s1gpass", key_mgmt="SAE",
++                           scan_freq="904", scan_freq_offset="500",
++                           sae_pwe="1", ieee80211w="2")
++        for i in range(3):
++            hapd.wait_sta()
++        aid = []
++        for i in range(3):
++            aid.append(int(hapd.get_sta(dev[i].own_addr())['aid']))
++        logger.info("S1G assigned AIDs: " + str(aid))
++        if len(set(aid)) != 3:
++            raise Exception("AP did not assign unique AID to each S1G STA")
++        if any(a == 0 for a in aid):
++            raise Exception("AP assigned AID 0 to an S1G STA")
++    except Exception as e:
++        if isinstance(e, Exception) and str(e) == "AP startup failed":
++            raise HwsimSkip("S1G operation not supported in this environment")
++        raise
++    finally:
++        for i in range(3):
++            dev[i].request("DISCONNECT")
++            dev[i].wait_disconnected()
++        clear_regdom(hapd, dev)
+-- 
+2.43.0
+

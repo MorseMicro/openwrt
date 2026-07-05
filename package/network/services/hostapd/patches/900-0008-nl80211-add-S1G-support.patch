@@ -1,16 +1,22 @@
-From 5e06adaf968bd0dd2a6cb0aa1a91d55f6e2ca5ff Mon Sep 17 00:00:00 2001
+From 26edf65a0643db714eff1d3ec44b4d5ca0543f01 Mon Sep 17 00:00:00 2001
 From: Lachlan Hodges <lachlan.hodges@morsemicro.com>
 Date: Mon, 27 Oct 2025 14:44:22 +1100
-Subject: [PATCH 7/8] nl80211: add S1G support
+Subject: [PATCH 8/9] nl80211: add S1G support
 
+Introduce the ability to configure an S1G interface via nl80211.
+
+Signed-off-by: Lachlan Hodges <lachlan.hodges@morsemicro.com>
 ---
- src/drivers/driver_nl80211.c      | 51 +++++++++++++++++++++++++++++--
- src/drivers/driver_nl80211_capa.c | 34 +++++++++++++++++++--
- 2 files changed, 79 insertions(+), 6 deletions(-)
+ src/drivers/driver_nl80211.c       | 54 +++++++++++++++++++++++++++---
+ src/drivers/driver_nl80211_capa.c  | 36 ++++++++++++++++++--
+ src/drivers/driver_nl80211_event.c | 10 ++++--
+ 3 files changed, 90 insertions(+), 10 deletions(-)
 
+diff --git a/src/drivers/driver_nl80211.c b/src/drivers/driver_nl80211.c
+index 43ca2edce..c8fe9dd7c 100644
 --- a/src/drivers/driver_nl80211.c
 +++ b/src/drivers/driver_nl80211.c
-@@ -5016,6 +5016,7 @@ static int nl80211_put_freq_params(struc
+@@ -5016,6 +5016,7 @@ static int nl80211_put_freq_params(struct nl_msg *msg,
  	wpa_printf(MSG_DEBUG, "  * he_enabled=%d", freq->he_enabled);
  	wpa_printf(MSG_DEBUG, "  * vht_enabled=%d", freq->vht_enabled);
  	wpa_printf(MSG_DEBUG, "  * ht_enabled=%d", freq->ht_enabled);
@@ -18,7 +24,7 @@ Subject: [PATCH 7/8] nl80211: add S1G support
  	wpa_printf(MSG_DEBUG, "  * radar_background=%d",
  		   freq->radar_background);
  
-@@ -5023,7 +5024,43 @@ static int nl80211_put_freq_params(struc
+@@ -5023,7 +5024,43 @@ static int nl80211_put_freq_params(struct nl_msg *msg,
  	is_24ghz = hw_mode == HOSTAPD_MODE_IEEE80211G ||
  		hw_mode == HOSTAPD_MODE_IEEE80211B;
  
@@ -63,7 +69,17 @@ Subject: [PATCH 7/8] nl80211: add S1G support
  	    ((freq->he_enabled || freq->eht_enabled) && !is_24ghz)) {
  		enum nl80211_chan_width cw;
  
-@@ -5553,9 +5590,9 @@ static int nl80211_set_channel(struct i8
+@@ -5189,7 +5226,8 @@ static int wpa_driver_nl80211_set_ap(void *priv,
+ 
+ 		if (params->freq)
+ 			nl80211_link_set_freq(bss, params->mld_link_id,
+-					      params->freq->freq);
++					      params->freq->freq,
++					      params->freq->freq_offset);
+ 	}
+ 
+ 	if (params->proberesp && params->proberesp_len) {
+@@ -5560,9 +5598,9 @@ static int nl80211_set_channel(struct i802_bss *bss,
  	int ret;
  
  	wpa_printf(MSG_DEBUG,
@@ -72,10 +88,10 @@ Subject: [PATCH 7/8] nl80211: add S1G support
  		   freq->freq, freq->freq_offset, freq->ht_enabled, freq->vht_enabled,
 -		   freq->he_enabled, freq->eht_enabled, freq->bandwidth,
 +		   freq->he_enabled, freq->eht_enabled, freq->s1g_enabled, freq->bandwidth,
-  		   freq->center_freq1, freq->center_freq1_offset, freq->center_freq2);
+ 		   freq->center_freq1, freq->center_freq1_offset, freq->center_freq2);
  
  	msg = nl80211_bss_msg(bss, 0, set_chan ? NL80211_CMD_SET_CHANNEL :
-@@ -5736,6 +5773,14 @@ static int wpa_driver_nl80211_sta_add(vo
+@@ -5743,6 +5781,14 @@ static int wpa_driver_nl80211_sta_add(void *priv,
  				goto fail;
  		}
  
@@ -90,9 +106,11 @@ Subject: [PATCH 7/8] nl80211: add S1G support
  		if (params->ext_capab) {
  			wpa_hexdump(MSG_DEBUG, "  * ext_capab",
  				    params->ext_capab, params->ext_capab_len);
+diff --git a/src/drivers/driver_nl80211_capa.c b/src/drivers/driver_nl80211_capa.c
+index c340282a5..fcd8eeea9 100644
 --- a/src/drivers/driver_nl80211_capa.c
 +++ b/src/drivers/driver_nl80211_capa.c
-@@ -1658,6 +1658,24 @@ static void phy_info_vht_capa(struct hos
+@@ -1658,6 +1658,24 @@ static void phy_info_vht_capa(struct hostapd_hw_modes *mode,
  }
  
  
@@ -117,7 +135,7 @@ Subject: [PATCH 7/8] nl80211: add S1G support
  static int phy_info_edmg_capa(struct hostapd_hw_modes *mode,
  			      struct nlattr *bw_config,
  			      struct nlattr *channels)
-@@ -1732,6 +1750,13 @@ static void phy_info_freq(struct hostapd
+@@ -1732,6 +1750,13 @@ static void phy_info_freq(struct hostapd_hw_modes *mode,
  	if (tb_freq[NL80211_FREQUENCY_ATTR_NO_160MHZ])
  		chan->allowed_bw &= ~HOSTAPD_CHAN_WIDTH_160;
  
@@ -131,7 +149,7 @@ Subject: [PATCH 7/8] nl80211: add S1G support
  	if (tb_freq[NL80211_FREQUENCY_ATTR_DFS_STATE]) {
  		enum nl80211_dfs_state state =
  			nla_get_u32(tb_freq[NL80211_FREQUENCY_ATTR_DFS_STATE]);
-@@ -2113,6 +2138,8 @@ static int phy_info_band(struct phy_info
+@@ -2113,6 +2138,8 @@ static int phy_info_band(struct phy_info_arg *phy_info, struct nlattr *nl_band)
  			 tb_band[NL80211_BAND_ATTR_HT_MCS_SET]);
  	phy_info_vht_capa(mode, tb_band[NL80211_BAND_ATTR_VHT_CAPA],
  			  tb_band[NL80211_BAND_ATTR_VHT_MCS_SET]);
@@ -140,19 +158,28 @@ Subject: [PATCH 7/8] nl80211: add S1G support
  	ret = phy_info_edmg_capa(mode,
  				 tb_band[NL80211_BAND_ATTR_EDMG_BW_CONFIG],
  				 tb_band[NL80211_BAND_ATTR_EDMG_CHANNELS]);
-@@ -2182,8 +2209,9 @@ wpa_driver_nl80211_postprocess_modes(str
+@@ -2182,8 +2209,9 @@ wpa_driver_nl80211_postprocess_modes(struct hostapd_hw_modes *modes,
  			continue;
  
  		modes[m].is_6ghz = false;
 -
 -		if (modes[m].channels[0].freq < 2000) {
 +		if (is_s1ghz_freq(modes[m].channels[0].freq)) {
-+			modes[m].mode = HOSTAPD_MODE_IEEE80211A;
++			modes[m].mode = HOSTAPD_MODE_IEEE80211AH;
 +		} else if (modes[m].channels[0].freq < 2000) {
  			modes[m].num_channels = 0;
  			continue;
  		} else if (modes[m].channels[0].freq < 4000) {
-@@ -2668,7 +2696,7 @@ static void nl80211_dump_chan_list(struc
+@@ -2641,6 +2669,8 @@ static const char * modestr(enum hostapd_hw_mode mode)
+ 		return "802.11a";
+ 	case HOSTAPD_MODE_IEEE80211AD:
+ 		return "802.11ad";
++	case HOSTAPD_MODE_IEEE80211AH:
++		return "802.11ah";
+ 	default:
+ 		return "?";
+ 	}
+@@ -2668,7 +2698,7 @@ static void nl80211_dump_chan_list(struct wpa_driver_nl80211_data *drv,
  
  			if (is_6ghz_freq(chan->freq))
  				drv->uses_6ghz = true;
@@ -161,3 +188,27 @@ Subject: [PATCH 7/8] nl80211: add S1G support
  				drv->uses_s1g = true;
  
  			if (drv->uses_s1g) {
+diff --git a/src/drivers/driver_nl80211_event.c b/src/drivers/driver_nl80211_event.c
+index 487b99dc4..d0c4f74e3 100644
+--- a/src/drivers/driver_nl80211_event.c
++++ b/src/drivers/driver_nl80211_event.c
+@@ -309,9 +309,13 @@ static void mlme_event_assoc(struct wpa_driver_nl80211_data *drv,
+ 	event.assoc_info.resp_frame = frame;
+ 	event.assoc_info.resp_frame_len = len;
+ 	if (len > 24 + sizeof(mgmt->u.assoc_resp)) {
+-		event.assoc_info.resp_ies = (u8 *) mgmt->u.assoc_resp.variable;
+-		event.assoc_info.resp_ies_len =
+-			len - 24 - sizeof(mgmt->u.assoc_resp);
++		if (is_s1ghz_freq(drv->assoc_freq)) {
++			event.assoc_info.resp_ies = (u8 *) mgmt->u.s1g_assoc_resp.variable;
++			event.assoc_info.resp_ies_len = len - 24 - sizeof(mgmt->u.s1g_assoc_resp);
++		} else {
++			event.assoc_info.resp_ies = (u8 *) mgmt->u.assoc_resp.variable;
++			event.assoc_info.resp_ies_len = len - 24 - sizeof(mgmt->u.assoc_resp);
++		}
+ 	}
+ 
+ 	if (req_ie) {
+-- 
+2.43.0
+

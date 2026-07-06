@@ -69,8 +69,9 @@ _wdev_prepare_channel() {
 	esac
 
 	case "$band" in
+		s1g) hwmode=ah;;
 		2g) hwmode=g;;
-		5g|6g|s1g) hwmode=a;;
+		5g|6g) hwmode=a;;
 		60g) hwmode=ad;;
 		*)
 			case "$hwmode" in

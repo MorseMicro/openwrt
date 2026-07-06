@@ -1,0 +1,35 @@
+From: Lachlan Hodges <lachlan.hodges@morsemicro.com>
+Date: Wed,  6 May 2026 23:19:25 +1000
+Subject: [PATCH wireless-next v2 2/2] wifi: mac80211: don't recalc min def for
+
+__ieee80211_recalc_chanctx_min_def() currently does not attempt
+to find the min def for S1G widths, meaning the BW will never change.
+However, the following call into ieee80211_chan_bw_change() will
+lead to a WARN within ieee80211_chan_width_to_rx_bw(). Not only that,
+this entire path is geared towards 20MHz based channels, so it doesn't
+make sense anyway. For now, return early when calculating the mindef
+for S1G channels.
+
+Fixes: d879d4da4579 ("wifi: mac80211: clean up initial STA NSS/bandwidth handling")
+Signed-off-by: Lachlan Hodges <lachlan.hodges@morsemicro.com>
+---
+ net/mac80211/chan.c | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+--- a/net/mac80211/chan.c
++++ b/net/mac80211/chan.c
+@@ -487,7 +487,13 @@ void ieee80211_recalc_chanctx_min_def(st
+ 				      struct ieee80211_link_data *rsvd_for,
+ 				      bool check_reserved)
+ {
+-	u32 changed = _ieee80211_recalc_chanctx_min_def(local, ctx, rsvd_for,
++	u32 changed;
++
++	/* No recalc for S1G chan ctx's */
++	if (cfg80211_chandef_is_s1g(&ctx->conf.def))
++		return;
++
++	changed = _ieee80211_recalc_chanctx_min_def(local, ctx, rsvd_for,
+ 							check_reserved);
+ 
+ 	if (!changed)

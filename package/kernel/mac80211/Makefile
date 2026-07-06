@@ -259,8 +259,10 @@ define KernelPackage/mm81x
   TITLE:=Driver for Morse Micro MM81x
   URL:=https://wireless.wiki.kernel.org/en/users/drivers/mm81x
   DEPENDS+= +kmod-mac80211 +kmod-lib-crc7 +mm81x-firmware +@DRIVER_11AH_SUPPORT +kmod-mmc +kmod-usb-core
-  FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/morsemicro/mm81x/mm81x.ko
-  AUTOLOAD:=$(call AutoProbe,mm81x)
+  FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/morsemicro/mm81x/mm81x_core.ko
+  FILES+=$(PKG_BUILD_DIR)/drivers/net/wireless/morsemicro/mm81x/mm81x_usb.ko
+  FILES+=$(PKG_BUILD_DIR)/drivers/net/wireless/morsemicro/mm81x/mm81x_sdio.ko
+  AUTOLOAD:=$(call AutoProbe,mm81x_core mm81x_sdio mm81x_usb)
 endef
 
 define KernelPackage/mm81x/description

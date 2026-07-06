@@ -1,24 +1,23 @@
-From 40b4f1cdb781fd066e906f362945db1031aa44a5 Mon Sep 17 00:00:00 2001
+From 6d377c066859c153e313322ed5e326143d32d2b3 Mon Sep 17 00:00:00 2001
 From: Lachlan Hodges <lachlan.hodges@morsemicro.com>
-Date: Wed, 25 Feb 2026 20:12:53 +1100
+Date: Wed, 18 Mar 2026 16:19:05 +1100
 Subject: [PATCH 4/4] mmc: sdio: add Morse Micro vendor ids
 
 Add the Morse Micro mm81x series vendor ids.
 
 Signed-off-by: Lachlan Hodges <lachlan.hodges@morsemicro.com>
 ---
- include/linux/mmc/sdio_ids.h | 4 ++++
- 1 file changed, 4 insertions(+)
+ include/linux/mmc/sdio_ids.h | 3 +++
+ 1 file changed, 3 insertions(+)
 
 --- a/include/linux/mmc/sdio_ids.h
 +++ b/include/linux/mmc/sdio_ids.h
-@@ -115,6 +115,10 @@
+@@ -115,6 +115,9 @@
  #define SDIO_VENDOR_ID_MICROCHIP_WILC		0x0296
  #define SDIO_DEVICE_ID_MICROCHIP_WILC1000	0x5347
  
-+#define SDIO_VENDOR_ID_MORSEMICRO		0x325B
-+#define SDIO_VENDOR_ID_MORSEMICRO_MM81XB1	0x0709
-+#define SDIO_VENDOR_ID_MORSEMICRO_MM81XB2	0x0809
++#define SDIO_VENDOR_ID_MORSEMICRO              0x325b
++#define SDIO_DEVICE_ID_MORSEMICRO_MM8108       0x0809
 +
  #define SDIO_VENDOR_ID_REALTEK			0x024c
  #define SDIO_DEVICE_ID_REALTEK_RTW8723BS	0xb723

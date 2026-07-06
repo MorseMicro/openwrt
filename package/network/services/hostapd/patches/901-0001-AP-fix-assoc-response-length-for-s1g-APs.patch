@@ -1,0 +1,36 @@
+From 437c093c8c447e9d38d7cbdfc88243fc3b151c38 Mon Sep 17 00:00:00 2001
+From: Arien Judge <arien.judge@morsemicro.com>
+Date: Mon, 6 Jul 2026 21:58:23 +1000
+Subject: [PATCH] AP: fix assoc response length for s1g APs
+
+In S1G we send AID response information elements with the response
+frame, rather than as a fixed field in the association response.
+Without accounting for the s1g assoc response format we end up
+2 bytes off the final response length leading to association
+failures with some devices strict about the received formats.
+
+Signed-off-by: Arien Judge <arien.judge@morsemicro.com>
+---
+ src/ap/ieee802_11.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/src/ap/ieee802_11.c b/src/ap/ieee802_11.c
+index 842165173..4e47d2d82 100644
+--- a/src/ap/ieee802_11.c
++++ b/src/ap/ieee802_11.c
+@@ -5242,7 +5242,11 @@ rsnxe_done:
+ 		p += wpabuf_len(hapd->conf->assocresp_elements);
+ 	}
+ 
+-	send_len += p - reply->u.assoc_resp.variable;
++	if (hapd->iconf->ieee80211ah) {
++		send_len += p - reply->u.s1g_assoc_resp.variable;
++	} else {
++		send_len += p - reply->u.assoc_resp.variable;
++	}
+ 
+ #ifdef CONFIG_FILS
+ 	if (sta &&
+-- 
+2.43.0
+

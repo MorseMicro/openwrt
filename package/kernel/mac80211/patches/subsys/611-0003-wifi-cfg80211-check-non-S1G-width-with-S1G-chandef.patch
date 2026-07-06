@@ -1,0 +1,37 @@
+From 7218d8e9d8485b08933d832615ca19760a8999cd Mon Sep 17 00:00:00 2001
+From: Lachlan Hodges <lachlan.hodges@morsemicro.com>
+Date: Thu, 12 Mar 2026 15:58:04 +1100
+Subject: [PATCH 3/3] wifi: cfg80211: check non-S1G width with S1G chandef
+
+It is not valid to have an S1G chandef with a non-S1G width. Enforce
+this during chandef validation.
+
+Signed-off-by: Lachlan Hodges <lachlan.hodges@morsemicro.com>
+Link: https://patch.msgid.link/20260312045804.362974-4-lachlan.hodges@morsemicro.com
+Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+---
+ net/wireless/chan.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/net/wireless/chan.c b/net/wireless/chan.c
+index 3e483fb27c4e..fa0764ede9c5 100644
+--- a/net/wireless/chan.c
++++ b/net/wireless/chan.c
+@@ -405,6 +405,14 @@ bool cfg80211_chandef_valid(const struct cfg80211_chan_def *chandef)
+ 
+ 	control_freq = chandef->chan->center_freq;
+ 
++	if (cfg80211_chandef_is_s1g(chandef) &&
++	    chandef->width != NL80211_CHAN_WIDTH_1 &&
++	    chandef->width != NL80211_CHAN_WIDTH_2 &&
++	    chandef->width != NL80211_CHAN_WIDTH_4 &&
++	    chandef->width != NL80211_CHAN_WIDTH_8 &&
++	    chandef->width != NL80211_CHAN_WIDTH_16)
++		return false;
++
+ 	switch (chandef->width) {
+ 	case NL80211_CHAN_WIDTH_5:
+ 	case NL80211_CHAN_WIDTH_10:
+-- 
+2.43.0
+

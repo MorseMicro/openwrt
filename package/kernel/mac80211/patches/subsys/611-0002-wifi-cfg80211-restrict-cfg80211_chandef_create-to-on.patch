@@ -1,0 +1,39 @@
+From 92d77e06e73ca987b030cfed322e8421db1d6f41 Mon Sep 17 00:00:00 2001
+From: Lachlan Hodges <lachlan.hodges@morsemicro.com>
+Date: Thu, 12 Mar 2026 15:58:03 +1100
+Subject: [PATCH 2/3] wifi: cfg80211: restrict cfg80211_chandef_create() to
+ only HT-based bands
+
+cfg80211_chandef_create() should only be used by bands that are
+HT-based and the chantype argument makes sense. Insert a WARN such
+that it isn't used on 60GHz and S1GHz bands and to catch any
+potential existing uses by those bands.
+
+Suggested-by: Johannes Berg <johannes@sipsolutions.net>
+Signed-off-by: Lachlan Hodges <lachlan.hodges@morsemicro.com>
+Link: https://patch.msgid.link/20260312045804.362974-3-lachlan.hodges@morsemicro.com
+Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+---
+ net/wireless/chan.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/net/wireless/chan.c b/net/wireless/chan.c
+index e3c18a4392bb..3e483fb27c4e 100644
+--- a/net/wireless/chan.c
++++ b/net/wireless/chan.c
+@@ -29,9 +29,11 @@ void cfg80211_chandef_create(struct cfg80211_chan_def *chandef,
+ 
+ 	*chandef = (struct cfg80211_chan_def) {
+ 		.chan = chan,
+-		.freq1_offset = chan->freq_offset,
+ 	};
+ 
++	WARN_ON(chan->band == NL80211_BAND_60GHZ ||
++		chan->band == NL80211_BAND_S1GHZ);
++
+ 	switch (chan_type) {
+ 	case NL80211_CHAN_NO_HT:
+ 		chandef->width = NL80211_CHAN_WIDTH_20_NOHT;
+-- 
+2.43.0
+

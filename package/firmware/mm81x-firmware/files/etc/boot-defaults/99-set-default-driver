@@ -2,6 +2,11 @@
 
 MODCONF="/etc/modules.conf"
 
+# The mm81x driver is split into a core module plus per-bus modules; all must be
+# blacklisted to keep it from auto-loading. Keep this in sync with
+# switch_wifi_driver's modules_for_driver_all().
+MM81X_MODULES="mm81x_core mm81x_sdio mm81x_usb"
+
 has_morse_module() {
 	[ -f /etc/modules.d/morse ] && return 0
 	for mod in /lib/modules/*/morse.ko; do
@@ -13,7 +18,9 @@ has_morse_module() {
 # Default to morse when the module is present in the image
 if has_morse_module; then
 	[ -f "$MODCONF" ] || touch "$MODCONF"
-	sed -i '/^blacklist morse$/d;/^blacklist mm81x$/d' "$MODCONF"
-	echo "blacklist mm81x" >> "$MODCONF"
+	sed -i '/^[[:space:]]*blacklist[[:space:]].*\<\(morse\|mm81x\|dot11ah\)/d' "$MODCONF"
+	for mod in $MM81X_MODULES; do
+		echo "blacklist $mod" >> "$MODCONF"
+	done
 fi
 exit 0

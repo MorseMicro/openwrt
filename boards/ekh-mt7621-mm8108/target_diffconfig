@@ -5,6 +5,9 @@ CONFIG_TARGET_DEVICE_ramips_mt7621_DEVICE_asus_rt-ax53u=y
 CONFIG_TARGET_DEVICE_ramips_mt7621_DEVICE_morse_ekh_halowlink2=y
 CONFIG_TARGET_ROOTFS_INITRAMFS=n
 
+# To compress the image a tiny bit further due to limited flash
+CONFIG_TARGET_SQUASHFS_BLOCK_SIZE=512
+
 CONFIG_MORSE_SDIO_ALIGNMENT=8
 
 CONFIG_TARGET_PREINIT_IP="10.42.0.1"

@@ -4,7 +4,7 @@
 
 / {
 	model = "GL.iNet GL-MT3000";
-	compatible = "glinet,gl-mt3000", "mediatek,mt7981";
+	compatible = "morse,ekh19", "glinet,gl-mt3000", "mediatek,mt7981";
 
 	aliases {
 		label-mac-device = &gmac0;

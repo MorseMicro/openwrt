@@ -5,6 +5,7 @@ set_preinit_iface() {
 	cudy,tr3000-v1|\
 	cudy,tr3000-v1-ubootmod|\
 	glinet,gl-mt3000|\
+	morse,*ekh19*|\
 	openembed,som7981|\
 	wavlink,wl-wn573hx3)
 		ip link set eth1 up

@@ -1,0 +1,18 @@
+diff --git a/net/mac80211/mlme.c b/net/mac80211/mlme.c
+index 0125b3e6175b..7f4a078a032d 100644
+--- a/net/mac80211/mlme.c
++++ b/net/mac80211/mlme.c
+@@ -1923,11 +1923,11 @@ ieee80211_sta_process_chanswitch(struct ieee80211_link_data *link,
+ 	}
+ 
+ 	/* channel switch handled in software */
+-	if (csa_ie.count <= 1)
++	if (csa_ie.count <= 1) /* consider short beacons time also */
+ 		ieee80211_queue_work(&local->hw, &link->u.mgd.chswitch_work);
+ 	else
+ 		mod_timer(&link->u.mgd.chswitch_timer,
+-			  TU_TO_EXP_TIME((csa_ie.count - 1) *
++			  TU_TO_EXP_TIME((csa_ie.count - 1) * sdata->vif.bss_conf.dtim_period *
+ 					 cbss->beacon_interval));
+ 	return;
+  lock_and_drop_connection:

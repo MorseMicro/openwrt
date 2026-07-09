@@ -1,0 +1,92 @@
+--- a/net/mac80211/cfg.c
++++ b/net/mac80211/cfg.c
+@@ -2012,6 +2012,10 @@ static int ieee80211_add_station(struct
+ 		return err;
+ 	}
+ 
++	if (ieee80211_vif_is_mesh(&sdata->vif)) {
++		mesh_update_mfp_flag(sdata,sta);
++	}
++
+ 	/*
+ 	 * for TDLS and for unassociated station, rate control should be
+ 	 * initialized only when rates are known and station is marked
+--- a/net/mac80211/mesh.c
++++ b/net/mac80211/mesh.c
+@@ -1556,6 +1556,19 @@ out:
+ 	sdata_unlock(sdata);
+ }
+ 
++void mesh_update_mfp_flag(struct ieee80211_sub_if_data *sdata, struct sta_info *sta)
++{
++	struct ieee80211_if_mesh *ifmsh = &sdata->u.mesh;
++	if (test_sta_flag(sta, WLAN_STA_MFP))
++	{
++		mpl_dbg(sdata,"%s: Mesh MFP Enabled\n",__func__);
++		ifmsh->mfp = IEEE80211_MESH_MFP_ENABLED;
++	} else {
++		mpl_dbg(sdata,"%s: Mesh MFP Disabled\n",__func__);
++		ifmsh->mfp = IEEE80211_MESH_MFP_DISABLED;
++	}
++}
++
+ static void mesh_bss_info_changed(struct ieee80211_sub_if_data *sdata)
+ {
+ 	struct ieee80211_if_mesh *ifmsh = &sdata->u.mesh;
+--- a/net/mac80211/mesh.h
++++ b/net/mac80211/mesh.h
+@@ -339,12 +339,15 @@ static inline bool mesh_path_sel_is_hwmp
+ void mesh_path_flush_by_iface(struct ieee80211_sub_if_data *sdata);
+ void mesh_sync_adjust_tsf(struct ieee80211_sub_if_data *sdata);
+ void ieee80211s_stop(void);
++void mesh_update_mfp_flag(struct ieee80211_sub_if_data *sdata, struct sta_info *sta);
+ #else
+ static inline bool mesh_path_sel_is_hwmp(struct ieee80211_sub_if_data *sdata)
+ { return false; }
+ static inline void mesh_path_flush_by_iface(struct ieee80211_sub_if_data *sdata)
+ {}
+ static inline void ieee80211s_stop(void) {}
++static inline void mesh_update_mfp_flag(struct ieee80211_sub_if_data *sdata, struct sta_info *sta)
++{}
+ #endif
+ 
+ #endif /* IEEE80211S_H */
+--- a/net/mac80211/mesh_hwmp.c
++++ b/net/mac80211/mesh_hwmp.c
+@@ -190,6 +190,8 @@ static int mesh_path_sel_frame_tx(enum m
+ 		pos += 4;
+ 	}
+ 
++	if (sdata->u.mesh.mfp == IEEE80211_MESH_MFP_DISABLED)
++		IEEE80211_SKB_CB(skb)->flags |= IEEE80211_TX_INTFL_DONT_ENCRYPT;
+ 	ieee80211_tx_skb(sdata, skb);
+ 	return 0;
+ }
+--- a/net/mac80211/tx.c
++++ b/net/mac80211/tx.c
+@@ -4285,6 +4285,12 @@ void __ieee80211_subif_start_xmit(struct
+ 		if (fast_tx &&
+ 		    ieee80211_xmit_fast(sdata, sta, fast_tx, skb))
+ 			goto out;
++	} else if (ieee80211_vif_is_mesh(&sdata->vif)) {
++		/* For mesh interface, sta is determined in ieee80211_tx_prepare after building
++		 * mesh header. Update tx pacing shift here, otherwise it affects TCP throughput as
++		 * there won't be enough packets to aggregate.
++		 */
++		sk_pacing_shift_update(skb->sk, sdata->local->hw.tx_sk_pacing_shift);
+ 	}
+ 
+ 	/* the frame could be fragmented, software-encrypted, and other
+--- a/net/mac80211/ieee80211_i.h
++++ b/net/mac80211/ieee80211_i.h
+@@ -734,6 +734,10 @@ struct ieee80211_if_mesh {
+ 	struct mesh_table mpp_paths; /* Store paths for MPP&MAP */
+ 	int mesh_paths_generation;
+ 	int mpp_paths_generation;
++	enum {
++		IEEE80211_MESH_MFP_DISABLED,
++		IEEE80211_MESH_MFP_ENABLED,
++	} mfp; /* management frame protection */
+ };
+ 
+ #ifdef CPTCFG_MAC80211_MESH

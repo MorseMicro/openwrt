@@ -2142,6 +2142,17 @@ define Device/morse_halowlink1
 endef
 TARGET_DEVICES += morse_halowlink1
 
+define Device/morse_halowlink2
+  $(Device/dsa-migration)
+  IMAGE_SIZE := 32448k
+  DEVICE_VENDOR := MorseMicro
+  DEVICE_MODEL := HaLowLink 2
+  DEVICE_IMG_NAME = $(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(call sanitize,$$(DEVICE_MODEL))$$(if $$(filter-out squashfs,$$(1)),-$$(1))$$(if $$(filter-out sysupgrade.bin, $$(2)),-$$(2),.bin)
+  DEVICE_PACKAGES := kmod-mmc-mt7620 kmod-mt7603 \
+	kmod-morse netifd-morse morse-fw-8108
+endef
+TARGET_DEVICES += morse_halowlink2
+
 define Device/mqmaker_witi
   $(Device/dsa-migration)
   $(Device/uimage-lzma-loader)

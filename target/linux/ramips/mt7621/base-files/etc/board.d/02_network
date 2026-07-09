@@ -182,7 +182,8 @@ ramips_setup_interfaces()
 	ruijie,rg-ew1200g-pro-v1.1)
 		ucidef_set_interfaces_lan_wan "lan3 lan2 lan1" "wan"
 		;;
-	morse,halowlink1)
+	morse,halowlink1|\
+	morse,halowlink2)
 		ucidef_set_interfaces_lan_wan "usblan lan" "wan"
 		;;
 	*)

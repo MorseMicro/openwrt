@@ -1,4 +1,10 @@
-# MorseMicro OpenWrt
+# Morse Micro OpenWrt
+
+> [!NOTE]
+> This is the `3.0-dev` branch of the Morse Micro OpenWrt fork.
+> This branch uses the `mm6108-2.0.1` version of the [core Linux components](https://github.com/MorseMicro#core-components---linux) for MM6108 devices. MM8108 devices remain on `1.17.8`.
+> For updated MM8108 core components, see [`3.1-dev`](https://github.com/MorseMicro/openwrt/tree/3.1-dev)
+
 ## Dependencies
 
 To build the Morse Micro OpenWrt, you need a working Linux

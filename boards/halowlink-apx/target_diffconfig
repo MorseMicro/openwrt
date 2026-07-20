@@ -21,5 +21,3 @@ CONFIG_PACKAGE_nftables=n
 CONFIG_PACKAGE_kmod-nft-offload=n
 CONFIG_PACKAGE_odhcp6c=n
 CONFIG_PACKAGE_odhcpd-ipv6only=n
-CONFIG_PACKAGE_ppp=n
-CONFIG_PACKAGE_ppp-mod-pppoe=n

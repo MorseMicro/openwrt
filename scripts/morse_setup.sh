@@ -332,6 +332,12 @@ case "${MODE}" in
             sed -i "s/^CONFIG_VERSION_CODE=\"Morse-.*-dev\"$/CONFIG_VERSION_CODE=\"Morse-$COMMIT_HASH-$(date +%Y-%m-%d)\"/" .config
         fi
 
+        # Append the board name to the custom release repository URL so each board
+        # publishes/consumes feeds under its own sub-path, e.g.
+        # https://repo.apps.morsemicro.com/openwrt/releases/${version}/${BOARD}.
+        # Only applied when CONFIG_VERSION_REPO_CUSTOM has a non-empty value.
+        sed -i "s#^CONFIG_VERSION_REPO_CUSTOM=\"\(..*\)\"#CONFIG_VERSION_REPO_CUSTOM=\"\1/${BOARD}\"#" .config
+
         echo Make defconfig...
         KCONFIG_WARN_UNKNOWN_SYMBOLS=1 KCONFIG_WERROR=1 make defconfig
 

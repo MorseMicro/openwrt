@@ -1,0 +1,45 @@
+From: Andrew Pope <andrew.pope@morsemicro.com>
+Date: Tue, 14 Jul 2026 10:30:00 +1000
+Subject: [PATCH] mac80211: recalculate TIM when a station enters power save
+
+When an AP buffers frames for a station on its per-station TXQs and the
+station subsequently enters power save, sta_ps_start() records the
+buffered TIDs in txq_buffered_tids but does not update the TIM. The
+station's TIM bit is only ever set when a further frame is buffered
+while the station is already asleep
+(ieee80211_tx_h_unicast_ps_buf() -> sta_info_recalc_tim()).
+
+If no further downlink frame arrives for that station the beacon
+TIM never advertises the buffered traffic. A station relying on the
+TIM then remains in doze indefinitely on top of a non-empty queue. Its
+TXQs were removed from the scheduler's active list at PS entry, nothing
+pages it, and the flow deadlocks until an unrelated event wakes the
+station.
+
+Recalculate the TIM at the end of sta_ps_start(), so traffic
+already buffered at PS entry is advertised immediately.
+sta_info_recalc_tim() already consults txq_buffered_tids, which is
+updated above, and is safe in this context (it is already called
+from equivalent paths such as the tx handlers and
+ieee80211_handle_filtered_frame()).
+
+Only kernels where the driver uses the mac80211 TXQ (iTXQ) pull path
+are affected; push-path builds (mac80211 < 5.9/5.10) buffer PS traffic
+via ps_tx_buf at transmit time, which already recalculates the TIM.
+
+Signed-off-by: Andrew Pope <andrew.pope@morsemicro.com>
+---
+ net/mac80211/rx.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/net/mac80211/rx.c
++++ b/net/mac80211/rx.c
+@@ -1602,6 +1602,8 @@ static void sta_ps_start(struct sta_info
+ 		else
+ 			clear_bit(tid, &sta->txq_buffered_tids);
+ 	}
++
++	sta_info_recalc_tim(sta);
+ }
+ 
+ static void sta_ps_end(struct sta_info *sta)

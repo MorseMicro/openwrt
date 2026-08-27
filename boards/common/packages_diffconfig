@@ -41,7 +41,6 @@ CONFIG_BUSYBOX_CONFIG_FEATURE_LESS_ASK_TERMINAL=y
 CONFIG_PACKAGE_morse-bundle=y
 CONFIG_PACKAGE_morse-copy-coredump=y
 CONFIG_PACKAGE_smart_manager=y
-CONFIG_PACKAGE_morse-button=y
 CONFIG_PACKAGE_morse-leds=y
 CONFIG_PACKAGE_morse-bcf-info=y
 CONFIG_PACKAGE_morse-firmware-sign=y

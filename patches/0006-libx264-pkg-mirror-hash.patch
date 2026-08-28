@@ -1,0 +1,25 @@
+From 2d0dd7832df99c3851d051c0a1f99890f298ae48 Mon Sep 17 00:00:00 2001
+From: James Haggerty <james.haggerty@morsemicro.com>
+Date: Fri, 28 Aug 2026 14:25:31 +1000
+Subject: [PATCH] Incorrect PKG_MIRROR_HASH in upstream (xz?)
+
+---
+ libs/libx264/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/feeds/packages/libs/libx264/Makefile b/feeds/packages/libs/libx264/Makefile
+index 05c5c3d84..8ac0d5d86 100644
+--- a/feeds/packages/libs/libx264/Makefile
++++ b/feeds/packages/libs/libx264/Makefile
+@@ -14,7 +14,7 @@ PKG_SOURCE_PROTO:=git
+ PKG_SOURCE_URL:=https://code.videolan.org/videolan/x264.git
+ PKG_SOURCE_DATE:=2024-05-13
+ PKG_SOURCE_VERSION:=4613ac3c15fd75cebc4b9f65b7fb95e70a3acce1
+-PKG_MIRROR_HASH:=03d8ca3495185504a601e36bff017e1044cb3f6c32cb567fb12d6f9707bb78cd
++PKG_MIRROR_HASH:=ac55224b0b4eb459d3b594b6014aa97a48c8a3d603fc68959debef833fbeaf58
+ 
+ PKG_MAINTAINER:=Adrian Panella <ianchi74@outlook.com>
+ PKG_LICENSE:=GPL-2.0-or-later
+-- 
+2.53.0
+

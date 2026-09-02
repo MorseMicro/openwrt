@@ -360,6 +360,8 @@ $(PACKAGE_DIR):
 	mkdir -p $@
 
 compile:
+	$(if $(REMOTE_INSTALL),$(if $(IPKGS),@$(SCRIPT_DIR)/remote-install.sh copy "$(REMOTE_INSTALL)" $(foreach pkg,$(IPKGS),$(PACK_$(pkg)))))
+
 .install: .compile
 install: compile
 

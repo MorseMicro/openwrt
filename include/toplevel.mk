@@ -218,12 +218,20 @@ val.% var.%: FORCE
 
 WARN_PARALLEL_ERROR = $(if $(BUILD_LOG),,$(and $(filter -j,$(MAKEFLAGS)),$(findstring s,$(OPENWRT_VERBOSE))))
 
+ifneq ($(REMOTE_INSTALL),)
+  export REMOTE_INSTALL
+  REMOTE_INSTALL_INIT:=@$(TOPDIR)/scripts/remote-install.sh init "$(REMOTE_INSTALL)"
+  REMOTE_INSTALL_RUN:=@$(TOPDIR)/scripts/remote-install.sh install "$(REMOTE_INSTALL)"
+endif
+
 ifeq ($(SDK),1)
 
 %::
 	@+$(PREP_MK) $(NO_TRACE_MAKE) -r -s prereq
 	@./scripts/config/conf $(KCONF_FLAGS) --defconfig=.config Config.in
+	$(REMOTE_INSTALL_INIT)
 	@+$(ULIMIT_FIX) $(SUBMAKE) -r $@
+	$(REMOTE_INSTALL_RUN)
 
 else
 
@@ -236,10 +244,12 @@ else
 			printf "$(_R)WARNING: your configuration is out of sync. Please run make menuconfig, oldconfig or defconfig!$(_N)\n" >&2; \
 		fi \
 	)
+	$(REMOTE_INSTALL_INIT)
 	@+$(ULIMIT_FIX) $(SUBMAKE) -r $@ $(if $(WARN_PARALLEL_ERROR), || { \
 		printf "$(_R)Build failed - please re-run with -j1 to see the real error message$(_N)\n" >&2; \
 		false; \
 	} )
+	$(REMOTE_INSTALL_RUN)
 
 endif
 

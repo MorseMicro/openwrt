@@ -74,6 +74,14 @@ ifneq ($(if $(CONFIG_SRC_TREE_OVERRIDE),$(wildcard ./git-src)),)
   USE_GIT_TREE:=1
   QUILT:=1
 endif
+# A directory (usually a symlink) at $(TOPDIR)/pkg-src/$(PKG_NAME) is built
+# in place, exactly as if USE_SOURCE_DIR had been passed on the command line.
+# Unlike passing it on the command line, this only affects the one package,
+# not everything else built in the same invocation. If a package has both a
+# pkg-src and a git-src entry, pkg-src wins.
+ifneq ($(if $(PKG_NAME),$(wildcard $(TOPDIR)/pkg-src/$(PKG_NAME)/*)),)
+  USE_SOURCE_DIR?=$(realpath $(TOPDIR)/pkg-src/$(PKG_NAME))
+endif
 ifdef USE_SOURCE_DIR
   QUILT:=1
 endif

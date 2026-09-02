@@ -31,6 +31,7 @@ public-key.pem
 .emacs.desktop*
 TAGS*~
 git-src
+pkg-src
 .project
 .cproject
 .ccache

@@ -43,10 +43,17 @@ Usage:
                                     for custom configurations.
 
             -x                      Apply extra diffconfig options in common_extra. One of these is
-                                    'dev' (no minification, use local git-src if linked, etc.).
+                                    'debug' (no minification, use local git-src if linked, etc.).
 
             -g                      Override the source of a package to use a git-src tree.
                                     Format is <PKG_NAME>:<git path>. (-g morse_driver:../morse_driver/)
+                                    Can be specified multiple times.
+
+            -p                      Override the source of a package to build in place in a
+                                    local directory (pkg-src). Unlike -g, the build happens
+                                    inside that directory rather than a copy of it, so edits
+                                    are picked up directly and build output lands there too.
+                                    Format is <PKG_NAME>:<path>. (-p hostapd_s1g:../hostap/)
                                     Can be specified multiple times.
 
             -l <target>             loads selected target defconfig [deprecated]
@@ -65,7 +72,7 @@ Usage:
 
         eg.:
             ${0} -i -b ekh03v4
-            ${0} -m -x dev -b ekh01
+            ${0} -m -x debug -b ekh01
 
 EOF
     echo -e "Available extra (-x) options:\n"
@@ -163,6 +170,21 @@ patch_feeds_packages(){
 }
 
 
+# Remove and recreate the symlinks in a source override directory (git-src or
+# pkg-src). Only symlinks are removed, so we don't destroy any user content.
+link_src_overrides(){
+    local dir="${1}"
+    shift
+
+    mkdir -p "./${dir}/"
+    find "./${dir}/" -maxdepth 1 -type l -exec rm -v {} \;
+    for override in "$@"; do
+        package=$(echo "$override" | cut -f1 -d:)
+        path=$(echo "$override" | cut -f2 -d:)
+        ln -vfrs "$path" "${dir}/$package"
+    done
+}
+
 
 # script has to run from openwrt top
 if [ "$(realpath "$0")" != "$(realpath -q ./scripts/morse_setup.sh)" ]; then
@@ -178,9 +200,10 @@ EXT_TOOLCHAIN=
 DOWNLOAD_TOOLCHAIN=
 TOOLCHAIN_PATH=
 GIT_SRC_OVERRIDES=( )
+PKG_SRC_OVERRIDES=( )
 MODE=""
 
-while getopts ":l:s:b:x:g:ie:Emha" OPT; do
+while getopts ":l:s:b:x:g:p:ie:Emha" OPT; do
     case "${OPT}" in
         a)
             ALL_KMODS=1
@@ -212,6 +235,9 @@ while getopts ":l:s:b:x:g:ie:Emha" OPT; do
             ;;
         g)
             GIT_SRC_OVERRIDES+=( "$OPTARG" )
+            ;;
+        p)
+            PKG_SRC_OVERRIDES+=( "$OPTARG" )
             ;;
         h)
             usage 0
@@ -341,15 +367,8 @@ case "${MODE}" in
         echo Make defconfig...
         KCONFIG_WARN_UNKNOWN_SYMBOLS=1 KCONFIG_WERROR=1 make defconfig
 
-        # Remove and recreate symlinks for git-src overrides.
-        # Only remove symlinks in git-src, so we dont destroy any user content.
-        mkdir -p "./git-src/"
-        find ./git-src/ -maxdepth 1 -type l -exec rm -v {} \;
-        for git_src_override in "${GIT_SRC_OVERRIDES[@]}"; do
-            package=$(echo "$git_src_override" | cut -f1 -d:)
-            git_path=$(echo "$git_src_override" | cut -f2 -d:)
-            ln -vfrs "$git_path" "git-src/$package"
-        done
+        link_src_overrides git-src "${GIT_SRC_OVERRIDES[@]}"
+        link_src_overrides pkg-src "${PKG_SRC_OVERRIDES[@]}"
 
         if [ "${EXT_TOOLCHAIN}" = "1" ]; then
             read -r target subtarget <<<"$(sed -nE 's/^CONFIG_TARGET_([a-z0-9]+)_([a-z0-9]+)=y/\1 \2/p' "boards/${BOARD}/target_diffconfig")"

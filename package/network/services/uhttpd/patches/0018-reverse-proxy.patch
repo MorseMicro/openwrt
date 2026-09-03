@@ -1,0 +1,919 @@
+From a4f028c41ca50aecff029d0c6a03b3085c951a6a Mon Sep 17 00:00:00 2001
+From: James Haggerty <james.haggerty@morsemicro.com>
+Date: Wed, 19 Aug 2026 12:05:56 +1000
+Subject: [PATCH] Vibe-coded reverse proxy
+
+Useful when serving things like ttyd/mediamtx from LuCI
+via https (if nothing else, browsers won't like including
+non-https iframes etc.).
+
+See: https://github.com/openwrt/uhttpd/pull/41
+---
+ CMakeLists.txt |   2 +-
+ client.c       |  19 ++
+ main.c         |  17 +-
+ proxy.c        | 571 +++++++++++++++++++++++++++++++++++++++++++++++++
+ relay.c        |  48 ++++-
+ uhttpd.h       |  44 ++++
+ 6 files changed, 695 insertions(+), 6 deletions(-)
+ create mode 100644 proxy.c
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 58eb6dd..dd1f2a2 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -25,7 +25,7 @@ ENDIF()
+ FIND_PATH(ubox_include_dir libubox/usock.h)
+ INCLUDE_DIRECTORIES(${ubox_include_dir})
+ 
+-SET(SOURCES main.c listen.c client.c utils.c file.c auth.c cgi.c relay.c proc.c plugin.c handler.c)
++SET(SOURCES main.c listen.c client.c utils.c file.c auth.c cgi.c relay.c proc.c proxy.c plugin.c handler.c)
+ IF(TLS_SUPPORT)
+ 	SET(SOURCES ${SOURCES} tls.c)
+ 	ADD_DEFINITIONS(-DHAVE_TLS)
+diff --git a/client.c b/client.c
+index 0506633..5f7a454 100644
+--- a/client.c
++++ b/client.c
+@@ -548,6 +548,23 @@ static bool client_data_cb(struct client *cl, char *buf, int len)
+ 	return false;
+ }
+ 
++static bool client_tunnel_cb(struct client *cl, char *buf, int len)
++{
++	struct dispatch *d = &cl->dispatch;
++	int cur;
++
++	if (!d->data_send || d->data_blocked)
++		return false;
++
++	cur = d->data_send(cl, buf, len);
++	if (cur <= 0)
++		return false;
++
++	ustream_consume(cl->us, cur);
++
++	return true;
++}
++
+ static bool client_header_cb(struct client *cl, char *buf, int len)
+ {
+ 	char *newline;
+@@ -572,6 +589,7 @@ static read_cb_t read_cbs[] = {
+ 	[CLIENT_STATE_INIT] = client_init_cb,
+ 	[CLIENT_STATE_HEADER] = client_header_cb,
+ 	[CLIENT_STATE_DATA] = client_data_cb,
++	[CLIENT_STATE_TUNNEL] = client_tunnel_cb,
+ };
+ 
+ void uh_client_read_cb(struct client *cl)
+@@ -592,6 +610,7 @@ void uh_client_read_cb(struct client *cl)
+ 		if (!read_cbs[cl->state](cl, str, len)) {
+ 			if (len == us->r.buffer_len &&
+ 			    cl->state != CLIENT_STATE_DATA &&
++			    cl->state != CLIENT_STATE_TUNNEL &&
+ 			    cl->state != CLIENT_STATE_DONE)
+ 				uh_header_error(cl, 413, "Request Entity Too Large");
+ 			break;
+diff --git a/main.c b/main.c
+index b0435d7..6694878 100644
+--- a/main.c
++++ b/main.c
+@@ -166,6 +166,11 @@ static int usage(const char *name)
+ 		"	-X		Enable CORS HTTP headers on JSON-RPC api\n"
+ 		"	-e		Events subscription reconnection time (retry value)\n"
+ #endif
++		"	-Y prefix=host[:port][/path]\n"
++		"	                Reverse proxy requests below prefix to the given\n"
++		"	                backend, -Y may be repeated. Without /path the URL\n"
++		"	                is passed on unchanged, otherwise prefix is replaced\n"
++		"	                by it. Protocol upgrades (WebSocket) are tunnelled\n"
+ 		"	-x string       URL prefix for CGI handler, default is '/cgi-bin'\n"
+ 		"	-y alias[=path]	URL alias handle\n"
+ 		"	-i .ext=path    Use interpreter at path for files with the given extension\n"
+@@ -198,6 +203,7 @@ static void init_defaults_pre(void)
+ #if HAVE_UCODE
+ 	INIT_LIST_HEAD(&conf.ucode_prefix);
+ #endif
++	INIT_LIST_HEAD(&conf.proxy_prefix);
+ }
+ 
+ static void init_defaults_post(void)
+@@ -296,7 +302,7 @@ int main(int argc, char **argv)
+ 	init_defaults_pre();
+ 	signal(SIGPIPE, SIG_IGN);
+ 
+-	while ((ch = getopt(argc, argv, "A:ab:C:c:Dd:E:e:fh:H:I:i:K:k:L:l:m:N:n:O:o:P:p:qRr:Ss:T:t:U:u:Xx:y:z:")) != -1) {
++	while ((ch = getopt(argc, argv, "A:ab:C:c:Dd:E:e:fh:H:I:i:K:k:L:l:m:N:n:O:o:P:p:qRr:Ss:T:t:U:u:Xx:Y:y:z:")) != -1) {
+ 		switch(ch) {
+ #ifdef HAVE_TLS
+ 		case 'C':
+@@ -398,6 +404,14 @@ int main(int argc, char **argv)
+ 			conf.cgi_prefix = optarg;
+ 			break;
+ 
++		case 'Y':
++			if (uh_proxy_add(optarg)) {
++				fprintf(stderr, "Error: Invalid proxy target: %s\n",
++						optarg);
++				exit(1);
++			}
++			break;
++
+ 		case 'y':
+ 			alias = calloc(1, sizeof(*alias));
+ 			if (!alias) {
+@@ -605,6 +619,7 @@ int main(int argc, char **argv)
+ 	}
+ 
+ 	init_defaults_post();
++	uh_proxy_init();
+ 
+ 	if (!bound) {
+ 		fprintf(stderr, "Error: No sockets bound, unable to continue\n");
+diff --git a/proxy.c b/proxy.c
+new file mode 100644
+index 0000000..e3f903f
+--- /dev/null
++++ b/proxy.c
+@@ -0,0 +1,571 @@
++/*
++ * uhttpd - Tiny single-threaded httpd - reverse proxy handler
++ *
++ *   Copyright (C) 2010-2013 Jo-Philipp Wich <xm@subsignal.org>
++ *   Copyright (C) 2013 Felix Fietkau <nbd@openwrt.org>
++ *
++ * Permission to use, copy, modify, and/or distribute this software for any
++ * purpose with or without fee is hereby granted, provided that the above
++ * copyright notice and this permission notice appear in all copies.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
++ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
++ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
++ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++ */
++
++#define _GNU_SOURCE
++
++#include <sys/types.h>
++#include <sys/socket.h>
++#include <arpa/inet.h>
++#include <stdlib.h>
++#include <string.h>
++#include <strings.h>
++#include <unistd.h>
++
++#include <libubox/blobmsg.h>
++#include <libubox/usock.h>
++
++#include "uhttpd.h"
++
++#define UH_PROXY_MAX_PENDING	(64 * 1024)
++
++/*
++ * RFC 9110 7.6.1: connection-specific fields must not be forwarded by an
++ * intermediary.
++ */
++static const char * const skip_request_headers[] = {
++	"connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
++	"te", "trailer", "transfer-encoding", "upgrade",
++	"x-forwarded-for", "x-forwarded-proto", "x-forwarded-host",
++	/* internal, they hold the credentials of the proxy's own auth realm */
++	"URL", "http-auth-user", "http-auth-pass",
++};
++
++static const char * const skip_response_headers[] = {
++	"connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
++	"te", "trailer", "upgrade",
++};
++
++static bool
++header_in(const char * const *list, size_t len, const char *name, bool upgrade)
++{
++	size_t i;
++
++	for (i = 0; i < len; i++) {
++		if (strcasecmp(name, list[i]))
++			continue;
++
++		if (upgrade && (!strcasecmp(name, "connection") ||
++		                !strcasecmp(name, "upgrade")))
++			return false;
++
++		return true;
++	}
++
++	return false;
++}
++
++static struct proxy_prefix *proxy_match(const char *url)
++{
++	struct proxy_prefix *px, *match = NULL;
++
++	list_for_each_entry(px, &conf.proxy_prefix, list) {
++		char sep = url[px->prefix_len];
++
++		if (strncmp(url, px->prefix, px->prefix_len))
++			continue;
++
++		if (sep && sep != '/' && sep != '?')
++			continue;
++
++		/* longest matching prefix wins */
++		if (match && match->prefix_len >= px->prefix_len)
++			continue;
++
++		match = px;
++	}
++
++	return match;
++}
++
++static bool uh_proxy_check_url(const char *url)
++{
++	return proxy_match(url) != NULL;
++}
++
++/* Handlers selected by check_url() bypass the file request path and with it
++ * uh_auth_check(), so a proxy prefix listed in the config file has to be
++ * checked here. Credentials are consumed by us and not passed on.
++ */
++static bool proxy_auth_check(struct client *cl, const char *url)
++{
++	static const struct blobmsg_policy policy = {
++		.name = "authorization", .type = BLOBMSG_TYPE_STRING
++	};
++	struct blob_attr *tb;
++	char path[PATH_MAX];
++	const char *sep;
++	size_t len;
++
++	sep = strchr(url, '?');
++	len = sep ? (size_t)(sep - url) : strlen(url);
++	if (len >= sizeof(path))
++		len = sizeof(path) - 1;
++
++	memcpy(path, url, len);
++	path[len] = 0;
++
++	blobmsg_parse(&policy, 1, &tb, blob_data(cl->hdr.head),
++	              blob_len(cl->hdr.head));
++
++	return uh_auth_check(cl, path, tb ? blobmsg_data(tb) : NULL, NULL, NULL);
++}
++
++static bool proxy_want_upgrade(struct client *cl)
++{
++	struct blob_attr *cur;
++	bool connection = false, upgrade = false;
++	int rem;
++
++	blob_for_each_attr(cur, cl->hdr.head, rem) {
++		const char *name = blobmsg_name(cur);
++
++		/* header names in cl->hdr have been lowercased already */
++		if (!strcmp(name, "connection")) {
++			/* the field is a comma separated list of tokens */
++			connection = strcasestr(blobmsg_get_string(cur),
++			                        "upgrade") != NULL;
++		} else if (!strcmp(name, "upgrade")) {
++			upgrade = true;
++		}
++	}
++
++	return connection && upgrade;
++}
++
++static void
++proxy_send_request(struct client *cl, struct proxy_prefix *px, const char *url)
++{
++	struct dispatch_proxy *p = &cl->dispatch.proxy;
++	struct ustream *us = &p->r.sfd.stream;
++	enum http_version version = cl->request.version;
++	char addr[INET6_ADDRSTRLEN];
++	struct blob_attr *cur;
++	int rem;
++
++	/* Speaking HTTP/1.0 to the backend for a HTTP/1.0 client keeps it from
++	 * answering with a chunked body that the client could not decode.
++	 */
++	if (version == UH_HTTP_VER_0_9)
++		version = UH_HTTP_VER_1_0;
++
++	ustream_printf(us, "%s ", http_methods[cl->request.method]);
++
++	if (px->path) {
++		const char *rest = url + px->prefix_len;
++
++		ustream_printf(us, "%s%s", px->path, *rest ? rest : "/");
++	} else {
++		ustream_printf(us, "%s", url);
++	}
++
++	ustream_printf(us, " %s\r\n", http_versions[version]);
++
++	blob_for_each_attr(cur, cl->hdr.head, rem) {
++		const char *name = blobmsg_name(cur);
++
++		if (header_in(skip_request_headers,
++		              ARRAY_SIZE(skip_request_headers), name, p->upgrade))
++			continue;
++
++		ustream_printf(us, "%s: %s\r\n", name, blobmsg_get_string(cur));
++	}
++
++	if (!p->upgrade)
++		ustream_printf(us, "Connection: close\r\n");
++
++	if (p->chunked_req)
++		ustream_printf(us, "Transfer-Encoding: chunked\r\n");
++
++	inet_ntop(cl->peer_addr.family, &cl->peer_addr.in, addr, sizeof(addr));
++	ustream_printf(us, "X-Forwarded-For: %s\r\n", addr);
++	ustream_printf(us, "X-Forwarded-Proto: %s\r\n", cl->tls ? "https" : "http");
++	ustream_printf(us, "\r\n");
++}
++
++static bool proxy_handle_status(struct relay *r, char *line)
++{
++	struct dispatch_proxy *p = &r->cl->dispatch.proxy;
++	unsigned long code;
++	char *end, *msg;
++
++	if (strncmp(line, "HTTP/", 5))
++		return false;
++
++	msg = strchr(line, ' ');
++	if (!msg)
++		return false;
++
++	while (*msg == ' ')
++		msg++;
++
++	code = strtoul(msg, &end, 10);
++	if (end != msg + 3 || code < 100 || code > 599)
++		return false;
++
++	if (*end == ' ')
++		end++;
++	else if (*end)
++		return false;
++
++	p->status_code = (int)code;
++	snprintf(p->status_msg, sizeof(p->status_msg), "%s", end);
++
++	return true;
++}
++
++static void
++proxy_handle_header(struct relay *r, const char *name, const char *val)
++{
++	struct client *cl = r->cl;
++	struct dispatch_proxy *p = &cl->dispatch.proxy;
++
++	if (!strcasecmp(name, "Content-Length") ||
++	    !strcasecmp(name, "Transfer-Encoding")) {
++		/* the body is relayed as it arrives, uh_chunk_write() must not
++		 * add a second layer of framing on top of it */
++		p->have_framing = true;
++		cl->request.disable_chunked = true;
++	}
++
++	if (header_in(skip_response_headers, ARRAY_SIZE(skip_response_headers),
++	              name, p->status_code == 101))
++		return;
++
++	blobmsg_add_string(&p->hdr, name, val);
++}
++
++static void proxy_tunnel_timeout_cb(struct uloop_timeout *timeout)
++{
++}
++
++static void proxy_handle_header_end(struct relay *r)
++{
++	struct client *cl = r->cl;
++	struct dispatch_proxy *p = &cl->dispatch.proxy;
++	struct blob_attr *cur;
++	int rem;
++
++	cl->http_code = p->status_code;
++
++	/* RFC 9110 6.4.1, 15.3.5, 15.4.5: these carry no body at all */
++	if (p->status_code < 200 || p->status_code == 204 ||
++	    p->status_code == 304)
++		p->have_framing = true;
++
++	if (p->status_code == 101 && p->upgrade) {
++		p->tunnel = true;
++		cl->request.disable_chunked = true;
++		cl->request.connection_close = true;
++	} else if (!p->have_framing && !uh_use_chunked(cl)) {
++		/* the response has no framing of its own and none can be added,
++		 * so it is delimited by the end of the connection */
++		cl->request.connection_close = true;
++	}
++
++	ustream_printf(cl->us, "%s %03i %s\r\n",
++	               http_versions[cl->request.version],
++	               p->status_code, p->status_msg);
++
++	if (!p->tunnel) {
++		if (cl->request.connection_close) {
++			ustream_printf(cl->us, "Connection: close\r\n");
++		} else {
++			ustream_printf(cl->us,
++			               "Connection: Keep-Alive\r\n"
++			               "Keep-Alive: timeout=%d\r\n",
++			               conf.http_keepalive);
++		}
++
++		if (!p->have_framing && uh_use_chunked(cl))
++			ustream_printf(cl->us, "Transfer-Encoding: chunked\r\n");
++	}
++
++	blob_for_each_attr(cur, p->hdr.head, rem)
++		ustream_printf(cl->us, "%s: %s\r\n", blobmsg_name(cur),
++		               blobmsg_get_string(cur));
++
++	ustream_printf(cl->us, "\r\n");
++
++	if (!p->tunnel)
++		return;
++
++	/* uh_chunk_write() re-arms the network timeout on every write, which
++	 * would tear down a tunnel that is merely idle. Dead peers have to be
++	 * detected with TCP keepalive (-A) instead.
++	 */
++	cl->timeout.cb = proxy_tunnel_timeout_cb;
++	cl->state = CLIENT_STATE_TUNNEL;
++
++	/* the client may have pipelined data behind the handshake */
++	uloop_timeout_set(&p->poll, 1);
++}
++
++static void proxy_handle_close(struct relay *r, int ret)
++{
++	struct client *cl = r->cl;
++
++	if (r->header_cb) {
++		uh_client_error(cl, 502, "Bad Gateway",
++		                "The backend did not return a valid response");
++		return;
++	}
++
++	if (cl->dispatch.proxy.tunnel)
++		cl->request.connection_close = true;
++
++	uh_request_done(cl);
++}
++
++static int proxy_data_send(struct client *cl, const char *data, int len)
++{
++	struct dispatch_proxy *p = &cl->dispatch.proxy;
++	struct ustream *us = &p->r.sfd.stream;
++
++	if (!p->r.cl || us->write_error)
++		return len; /* backend is gone, discard the rest of the body */
++
++	if (ustream_pending_data(us, true) >= UH_PROXY_MAX_PENDING) {
++		cl->dispatch.data_blocked = true;
++		return 0;
++	}
++
++	/* all or nothing, so that the chunk header matches what follows it */
++	if (p->chunked_req && !p->tunnel)
++		ustream_printf(us, "%X\r\n", len);
++
++	ustream_write(us, data, len, false);
++
++	if (p->chunked_req && !p->tunnel)
++		ustream_printf(us, "\r\n");
++
++	return len;
++}
++
++static void proxy_data_done(struct client *cl)
++{
++	struct dispatch_proxy *p = &cl->dispatch.proxy;
++
++	if (p->chunked_req && p->r.cl)
++		ustream_printf(&p->r.sfd.stream, "0\r\n\r\n");
++}
++
++/* the client connection drained, resume reading from the backend */
++static void proxy_relay_write_cb(struct client *cl)
++{
++	struct dispatch_proxy *p = &cl->dispatch.proxy;
++
++	if (ustream_pending_data(cl->us, true))
++		return;
++
++	ustream_set_read_blocked(&p->r.sfd.stream, false);
++	p->r.sfd.stream.notify_read(&p->r.sfd.stream, 0);
++}
++
++/* the backend connection drained, resume reading from the client */
++static void proxy_backend_write_cb(struct ustream *s, int bytes)
++{
++	struct relay *r = container_of(s, struct relay, sfd.stream);
++	struct client *cl = r->cl;
++
++	if (!cl || !cl->dispatch.data_blocked)
++		return;
++
++	if (ustream_pending_data(s, true) >= UH_PROXY_MAX_PENDING)
++		return;
++
++	cl->dispatch.data_blocked = false;
++	uloop_timeout_set(&cl->dispatch.proxy.poll, 1);
++}
++
++static void proxy_poll_cb(struct uloop_timeout *timeout)
++{
++	struct dispatch_proxy *p = container_of(timeout, struct dispatch_proxy, poll);
++	struct client *cl = container_of(p, struct client, dispatch.proxy);
++
++	if (p->tunnel)
++		uh_client_read_cb(cl);
++	else
++		client_poll_post_data(cl);
++
++	ustream_poll(cl->us);
++}
++
++static void proxy_close_fds(struct client *cl)
++{
++	struct dispatch_proxy *p = &cl->dispatch.proxy;
++
++	if (p->r.cl)
++		close(p->r.sfd.fd.fd);
++}
++
++static void proxy_free(struct client *cl)
++{
++	struct dispatch_proxy *p = &cl->dispatch.proxy;
++
++	uloop_timeout_cancel(&p->poll);
++	blob_buf_free(&p->hdr);
++	uh_relay_free(&p->r);
++}
++
++static void
++uh_proxy_handle_request(struct client *cl, char *url, struct path_info *pi)
++{
++	struct dispatch *d = &cl->dispatch;
++	struct dispatch_proxy *p = &d->proxy;
++	struct proxy_prefix *px;
++	int fd;
++
++	px = proxy_match(url);
++	if (!px)
++		return uh_client_error(cl, 500, "Internal Server Error",
++		                       "No backend for this URL");
++
++	if (!proxy_auth_check(cl, url))
++		return;
++
++	/* The socket is handed to the relay before it is connected: writes are
++	 * buffered by the ustream until the connection completes, and a failed
++	 * connect surfaces as an error on the stream, which is reported as a
++	 * 502 by proxy_handle_close().
++	 */
++	fd = usock(USOCK_TCP | USOCK_NONBLOCK, px->host, px->port);
++	if (fd < 0)
++		return uh_client_error(cl, 502, "Bad Gateway",
++		                       "Unable to connect to the backend");
++
++	blob_buf_init(&p->hdr, 0);
++	p->upgrade = proxy_want_upgrade(cl);
++	p->chunked_req = cl->request.transfer_chunked > 0;
++
++	uh_relay_open_fd(cl, &p->r, fd);
++
++	p->r.header_first = proxy_handle_status;
++	p->r.header_cb = proxy_handle_header;
++	p->r.header_end = proxy_handle_header_end;
++	p->r.close = proxy_handle_close;
++	p->r.sfd.stream.notify_write = proxy_backend_write_cb;
++	p->poll.cb = proxy_poll_cb;
++
++	d->free = proxy_free;
++	d->close_fds = proxy_close_fds;
++	d->data_send = proxy_data_send;
++	d->data_done = proxy_data_done;
++	d->write_cb = proxy_relay_write_cb;
++
++	proxy_send_request(cl, px, url);
++}
++
++static struct dispatch_handler proxy_dispatch = {
++	.check_url = uh_proxy_check_url,
++	.handle_request = uh_proxy_handle_request,
++};
++
++void uh_proxy_init(void)
++{
++	if (list_empty(&conf.proxy_prefix))
++		return;
++
++	uh_dispatch_add(&proxy_dispatch);
++}
++
++/* prefix=host[:port][/path], with an IPv6 host given in square brackets */
++int uh_proxy_add(const char *arg)
++{
++	struct proxy_prefix *px;
++	char *str, *target, *host, *port = NULL, *path = NULL;
++	size_t len;
++
++	str = strdup(arg);
++	if (!str)
++		return -1;
++
++	target = strchr(str, '=');
++	if (!target || str[0] != '/')
++		goto error;
++
++	*target++ = 0;
++
++	/* strip trailing slashes, "/" becomes a match-all prefix */
++	len = strlen(str);
++	while (len > 0 && str[len - 1] == '/')
++		str[--len] = 0;
++
++	host = target;
++	if (*host == '[') {
++		host++;
++		port = strchr(host, ']');
++		if (!port)
++			goto error;
++
++		*port++ = 0;
++	} else {
++		port = host;
++	}
++
++	/* The path has to be kept separately: the slash that starts it doubles
++	 * as the terminator of the host/port part.
++	 */
++	path = strchr(port, '/');
++	if (path) {
++		char *sep = path;
++
++		path = strdup(sep);
++		*sep = 0;
++
++		if (!path)
++			goto error;
++	}
++
++	port = strchr(port, ':');
++	if (port)
++		*port++ = 0;
++	else
++		port = "80";
++
++	if (!*host || !*port)
++		goto error;
++
++	px = calloc(1, sizeof(*px));
++	if (!px)
++		goto error;
++
++	px->prefix = str;
++	px->prefix_len = len;
++	px->host = host;
++	px->port = port;
++
++	if (path) {
++		/* a trailing slash is contributed by the rest of the URL */
++		len = strlen(path);
++		while (len > 0 && path[len - 1] == '/')
++			path[--len] = 0;
++
++		px->path = path;
++	}
++
++	list_add_tail(&px->list, &conf.proxy_prefix);
++
++	return 0;
++
++error:
++	free(path);
++	free(str);
++
++	return -1;
++}
+diff --git a/relay.c b/relay.c
+index 6db58ac..ce5b936 100644
+--- a/relay.c
++++ b/relay.c
+@@ -20,6 +20,16 @@
+ #include <signal.h>
+ #include "uhttpd.h"
+ 
++static bool relay_done(struct relay *r)
++{
++	struct ustream *s = &r->sfd.stream;
++
++	if (r->no_process)
++		return s->eof || s->write_error;
++
++	return r->process_done;
++}
++
+ void uh_relay_free(struct relay *r)
+ {
+ 	if (!r->cl)
+@@ -29,7 +39,8 @@ void uh_relay_free(struct relay *r)
+ 		kill(r->proc.pid, SIGKILL);
+ 
+ 	uloop_timeout_cancel(&r->timeout);
+-	uloop_process_delete(&r->proc);
++	if (!r->no_process)
++		uloop_process_delete(&r->proc);
+ 	ustream_free(&r->sfd.stream);
+ 	close(r->sfd.fd.fd);
+ 
+@@ -90,6 +101,21 @@ static void relay_process_headers(struct relay *r)
+ 			newline--;
+ 
+ 		*newline = 0;
++		if (r->header_first) {
++			bool ok;
++
++			ok = r->header_first(r, buf);
++			r->header_first = NULL;
++			ustream_consume(s, line_len);
++
++			if (!ok) {
++				relay_error(r);
++				return;
++			}
++
++			continue;
++		}
++
+ 		if (newline == buf) {
+ 			r->header_cb = NULL;
+ 			if (r->header_end)
+@@ -117,7 +143,7 @@ static void relay_read_cb(struct ustream *s, int bytes)
+ 	char *buf;
+ 	int len;
+ 
+-	if (r->process_done)
++	if (relay_done(r))
+ 		uloop_timeout_set(&r->timeout, 1);
+ 
+ 	if (!r->error)
+@@ -155,7 +181,7 @@ static void relay_close_if_done(struct uloop_timeout *timeout)
+ 
+ 	while (ustream_poll(&r->sfd.stream));
+ 
+-	if (!(r->process_done || s->eof) || (ustream_pending_data(s, false) && !r->header_cb))
++	if (!(relay_done(r) || s->eof) || (ustream_pending_data(s, false) && !r->header_cb))
+ 		return;
+ 
+ 	uh_relay_close(r, r->ret);
+@@ -165,7 +191,7 @@ static void relay_state_cb(struct ustream *s)
+ {
+ 	struct relay *r = container_of(s, struct relay, sfd.stream);
+ 
+-	if (r->process_done)
++	if (relay_done(r))
+ 		uloop_timeout_set(&r->timeout, 1);
+ }
+ 
+@@ -203,3 +229,17 @@ void uh_relay_open(struct client *cl, struct relay *r, int fd, int pid)
+ 
+ 	r->timeout.cb = relay_close_if_done;
+ }
++
++void uh_relay_open_fd(struct client *cl, struct relay *r, int fd)
++{
++	struct ustream *us = &r->sfd.stream;
++
++	r->cl = cl;
++	r->no_process = true;
++	us->notify_read = relay_read_cb;
++	us->notify_state = relay_state_cb;
++	us->string_data = true;
++	ustream_fd_init(&r->sfd, fd);
++
++	r->timeout.cb = relay_close_if_done;
++}
+diff --git a/uhttpd.h b/uhttpd.h
+index c658faa..41f0e44 100644
+--- a/uhttpd.h
++++ b/uhttpd.h
+@@ -76,6 +76,16 @@ struct ucode_prefix {
+ };
+ #endif
+ 
++struct proxy_prefix {
++	struct list_head list;
++	const char *prefix;
++	const char *host;
++	const char *port;
++	/* replacement for the matched prefix, NULL to pass the URL through */
++	const char *path;
++	size_t prefix_len;
++};
++
+ struct config {
+ 	const char *docroot;
+ 	const char *realm;
+@@ -107,6 +117,7 @@ struct config {
+ #ifdef HAVE_UCODE
+ 	struct list_head ucode_prefix;
+ #endif
++	struct list_head proxy_prefix;
+ };
+ 
+ struct auth_realm {
+@@ -161,6 +172,9 @@ enum client_state {
+ 	CLIENT_STATE_INIT,
+ 	CLIENT_STATE_HEADER,
+ 	CLIENT_STATE_DATA,
++	/* raw bidirectional pipe, entered after a successful protocol upgrade;
++	 * everything the client sends is handed to dispatch.data_send as-is */
++	CLIENT_STATE_TUNNEL,
+ 	CLIENT_STATE_DONE,
+ 	CLIENT_STATE_CLOSE,
+ 	CLIENT_STATE_CLEANUP,
+@@ -197,10 +211,17 @@ struct relay {
+ 	bool process_done;
+ 	bool error;
+ 	bool skip_data;
++	/* opened with uh_relay_open_fd(): there is no child process, the
++	 * lifetime of the relay is bound to the fd instead */
++	bool no_process;
+ 
+ 	int ret;
+ 	int header_ofs;
+ 
++	/* if set, the first line is passed here instead of being split into a
++	 * name/value pair; used to parse a HTTP status line. Returning false
++	 * aborts the relay. */
++	bool (*header_first)(struct relay *r, char *line);
+ 	void (*header_cb)(struct relay *r, const char *name, const char *value);
+ 	void (*header_end)(struct relay *r);
+ 	void (*close)(struct relay *r, int ret);
+@@ -215,6 +236,24 @@ struct dispatch_proc {
+ 	char status_msg[64];
+ };
+ 
++struct dispatch_proxy {
++	struct relay r;
++	struct uloop_timeout poll;
++	struct blob_buf hdr;
++	int status_code;
++	char status_msg[64];
++
++	/* the client asked for a protocol upgrade */
++	bool upgrade;
++	/* the backend accepted it, the connection is a raw pipe now */
++	bool tunnel;
++	/* the request body has to be re-chunked towards the backend */
++	bool chunked_req;
++	/* the response carries its own body framing (Content-Length,
++	 * Transfer-Encoding, or no body at all) */
++	bool have_framing;
++};
++
+ struct dispatch_handler {
+ 	struct list_head list;
+ 	bool script;
+@@ -267,6 +306,7 @@ struct dispatch {
+ 			int fd;
+ 		} file;
+ 		struct dispatch_proc proc;
++		struct dispatch_proxy proxy;
+ #ifdef HAVE_UBUS
+ 		struct dispatch_ubus ubus;
+ #endif
+@@ -345,6 +385,7 @@ void uh_interpreter_add(const char *ext, const char *path);
+ void uh_dispatch_add(struct dispatch_handler *d);
+ 
+ void uh_relay_open(struct client *cl, struct relay *r, int fd, int pid);
++void uh_relay_open_fd(struct client *cl, struct relay *r, int fd);
+ void uh_relay_close(struct relay *r, int ret);
+ void uh_relay_free(struct relay *r);
+ void uh_relay_kill(struct client *cl, struct relay *r);
+@@ -356,6 +397,9 @@ bool uh_create_process(struct client *cl, struct path_info *pi, char *url,
+ int uh_plugin_init(const char *name);
+ void uh_plugin_post_init(void);
+ 
++int uh_proxy_add(const char *arg);
++void uh_proxy_init(void);
++
+ int uh_handler_add(const char *file);
+ int uh_handler_run(struct client *cl, char **url, bool fallback);
+ 
+-- 
+2.53.0
+

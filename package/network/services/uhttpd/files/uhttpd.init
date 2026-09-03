@@ -180,6 +180,11 @@ start_instance()
 		 procd_append_param command -y "$alias"
 	done
 
+	config_get reverse_proxy "$cfg" reverse_proxy
+	for rp in $reverse_proxy; do
+		 procd_append_param command -Y "$rp"
+	done
+
 	config_get http "$cfg" listen_http
 	for listen in $http; do
 		 procd_append_param command -p "$listen"

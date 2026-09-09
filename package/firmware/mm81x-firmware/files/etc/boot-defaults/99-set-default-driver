@@ -18,7 +18,7 @@ has_morse_module() {
 # Default to morse when the module is present in the image
 if has_morse_module; then
 	[ -f "$MODCONF" ] || touch "$MODCONF"
-	sed -i '/^[[:space:]]*blacklist[[:space:]].*\<\(morse\|mm81x\|dot11ah\)/d' "$MODCONF"
+	sed -i '/^[[:space:]]*blacklist[[:space:]].*\<\(morse\|mm81x\)/d' "$MODCONF"
 	for mod in $MM81X_MODULES; do
 		echo "blacklist $mod" >> "$MODCONF"
 	done

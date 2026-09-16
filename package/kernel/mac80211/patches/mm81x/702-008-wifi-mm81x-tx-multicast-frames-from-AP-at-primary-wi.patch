@@ -1,0 +1,39 @@
+From 095c870ea6107a44bcef057a7bd992d008206d55 Mon Sep 17 00:00:00 2001
+From: Lachlan Hodges <lachlan.hodges@morsemicro.com>
+Date: Wed, 26 Aug 2026 16:49:37 +1000
+Subject: [PATCH 11/11] wifi: mm81x: tx multicast frames from AP at primary
+ width
+
+If an AP has stations that are operating on a sub-primary (i.e using
+the 4MHz primary of the 8MHz operating) multicast frames sent on the
+operating width will be lost. Make sure we tx them on the primary width
+to ensure all stations are capabile of receiving them.
+
+Signed-off-by: Lachlan Hodges <lachlan.hodges@morsemicro.com>
+---
+ drivers/net/wireless/morsemicro/mm81x/mac.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/drivers/net/wireless/morsemicro/mm81x/mac.c b/drivers/net/wireless/morsemicro/mm81x/mac.c
+index d77df6e9af85..4485748518b4 100644
+--- a/drivers/net/wireless/morsemicro/mm81x/mac.c
++++ b/drivers/net/wireless/morsemicro/mm81x/mac.c
+@@ -1257,6 +1257,15 @@ static int mm81x_tx_h_get_bw(struct mm81x *mors, struct ieee80211_sta *sta,
+ 	if (is_mgmt || info->control.flags & IEEE80211_TX_CTRL_PORT_CTRL_PROTO)
+ 		return cfg80211_chandef_s1g_pri_width(&mors->chandef);
+ 
++	/*
++	 * In AP mode group addressed frames go out at the primary width so
++	 * that every associated STA can receive them, including any that
++	 * cannot support the operating width.
++	 */
++	if (info->control.vif->type == NL80211_IFTYPE_AP &&
++	    is_multicast_ether_addr(ieee80211_get_DA(hdr)))
++		return cfg80211_chandef_s1g_pri_width(&mors->chandef);
++
+ 	if (sta)
+ 		mors_sta = (struct mm81x_sta *)sta->drv_priv;
+ 
+-- 
+2.43.0
+

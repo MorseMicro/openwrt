@@ -1,0 +1,51 @@
+wifi: mm81x: start beaconing on beacon enable, not interface add
+
+Currently we only initialise and start the beaconing process when the
+AP interface is first added. If the BSS alone is reconfigured and
+beaconing is temporarily stopped, the subsequent call to re-enable
+the beacon via BSS_CHANGED_BEACON_ENABLED is ignored and beaconing will
+be permanently stopped until the interface is completely re-added.
+
+To fix, move the beaconing start/stop to mm81x_mac_ops_bss_info_changed
+and react accordingly to info->enable_beacon and just keep the per-vif
+tasklet init in the add_interface callback.
+
+Fixes: b1906cea00b0 ("wifi: mm81x: add mm81x Wi-Fi HaLow driver")
+Signed-off-by: Samuele Yang <samuele.yang@morsemicro.com>
+---
+--- a/drivers/net/wireless/morsemicro/mm81x/mac.c
++++ b/drivers/net/wireless/morsemicro/mm81x/mac.c
+@@ -497,11 +497,10 @@
+ 	}
+ }
+ 
+-static void mm81x_mac_beacon_init(struct mm81x_vif *mors_vif)
++static void mm81x_mac_beacon_start(struct mm81x_vif *mors_vif)
+ {
+ 	struct mm81x *mors = mm81x_vif_to_mors(mors_vif);
+ 
+-	tasklet_setup(&mors_vif->u.ap.beacon_tasklet, mm81x_mac_beacon_tasklet);
+ 	mm81x_mac_beacon_irq_enable(mors_vif, true);
+ 	atomic_inc(&mors->num_bcn_vifs);
+ }
+@@ -1546,7 +1545,9 @@
+ 		mm81x_cmd_config_beacon_timer(mors, mors_vif,
+ 					      info->enable_beacon);
+ 
+-		if (!info->enable_beacon)
++		if (info->enable_beacon)
++			mm81x_mac_beacon_start(mors_vif);
++		else
+ 			mm81x_mac_beacon_finish(mors_vif);
+ 	}
+ 
+@@ -2214,7 +2215,8 @@
+ 	rcu_assign_pointer(mors->vifs[mors_vif->id], vif);
+ 
+ 	if (vif->type == NL80211_IFTYPE_AP)
+-		mm81x_mac_beacon_init(mors_vif);
++		tasklet_setup(&mors_vif->u.ap.beacon_tasklet,
++			      mm81x_mac_beacon_tasklet);
+ 
+ 	ret = mm81x_cmd_get_capabilities(mors, mors_vif->id, &mors->fw_caps);
+ 	if (ret) {

@@ -1,0 +1,28 @@
+From 51c455a96d1d44b6aed1b5d8c9bcf8c13cb6c692 Mon Sep 17 00:00:00 2001
+From: Lachlan Hodges <lachlan.hodges@morsemicro.com>
+Date: Wed, 12 Aug 2026 13:07:46 +1000
+Subject: [PATCH 02/11] wifi: cfg80211: remove duplicate s1g_cap kerneldoc
+
+ieee80211_supported_band::s1g_cap is already annotated.
+Remove the duplicate.
+
+Signed-off-by: Lachlan Hodges <lachlan.hodges@morsemicro.com>
+---
+ include/net/cfg80211.h | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/include/net/cfg80211.h b/include/net/cfg80211.h
+index 97c16d4ff127..2abf9e20cc22 100644
+--- a/include/net/cfg80211.h
++++ b/include/net/cfg80211.h
+@@ -576,7 +576,6 @@ struct ieee80211_sta_s1g_cap {
+  * @vht_cap: VHT capabilities in this band
+  * @s1g_cap: S1G capabilities in this band
+  * @edmg_cap: EDMG capabilities in this band
+- * @s1g_cap: S1G capabilities in this band (S1G band only, of course)
+  * @n_iftype_data: number of iftype data entries
+  * @iftype_data: interface type data entries.  Note that the bits in
+  *	@types_mask inside this structure cannot overlap (i.e. only
+-- 
+2.43.0
+

@@ -1,0 +1,39 @@
+From c9a6c6a4ee11130b571bef84b7aad5f2e45a3fb6 Mon Sep 17 00:00:00 2001
+From: Lachlan Hodges <lachlan.hodges@morsemicro.com>
+Date: Wed, 26 Aug 2026 14:20:30 +1000
+Subject: [PATCH 09/11] wifi: mm81x: tx EAPOLs at primary width
+
+Right now port control frames such as EAPOLs are sent at the operating
+width which, within noisier environments, can lead to increased
+association times and at higher attenuation potentially prevent
+association from occurring altogether. Make sure we send EAPOLs and
+any other port control frames at the primary width.
+
+Signed-off-by: Lachlan Hodges <lachlan.hodges@morsemicro.com>
+---
+ drivers/net/wireless/morsemicro/mm81x/mac.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/wireless/morsemicro/mm81x/mac.c b/drivers/net/wireless/morsemicro/mm81x/mac.c
+index 1444db98351b..fa3b0cfccffe 100644
+--- a/drivers/net/wireless/morsemicro/mm81x/mac.c
++++ b/drivers/net/wireless/morsemicro/mm81x/mac.c
+@@ -1247,13 +1247,14 @@ static int mm81x_tx_h_get_bw(struct mm81x *mors, struct ieee80211_sta *sta,
+ 			     struct sk_buff *skb, bool is_mgmt)
+ {
+ 	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)skb->data;
++	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
+ 	struct mm81x_sta *mors_sta = NULL;
+ 	int tx_bw_mhz;
+ 
+ 	if (ieee80211_is_probe_resp(hdr->frame_control))
+ 		return 1;
+ 
+-	if (is_mgmt)
++	if (is_mgmt || info->control.flags & IEEE80211_TX_CTRL_PORT_CTRL_PROTO)
+ 		return cfg80211_chandef_s1g_pri_width(&mors->chandef);
+ 
+ 	if (sta)
+-- 
+2.43.0
+

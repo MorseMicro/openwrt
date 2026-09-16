@@ -1,0 +1,42 @@
+From a41b5e34dab95ad5af9886b9190fff8a76052f0d Mon Sep 17 00:00:00 2001
+From: Lachlan Hodges <lachlan.hodges@morsemicro.com>
+Date: Sun, 9 Aug 2026 19:22:18 +1000
+Subject: [PATCH 06/11] wifi: mm81x: do not drop PS filtered frames in AP mode
+
+When the firmware reports a frame as filtered because the station has
+entered power save, the AP-mode path dropped the frame and returned
+"handled". In AP mode mac80211 owns the per-station power-save
+re-buffering, so the frame must instead be reported with
+IEEE80211_TX_STAT_TX_FILTERED and left for mac80211 to re-queue once
+the station wakes.
+
+Return false for AP interfaces so the tx-status path flags the frame as
+filtered rather than silently dropping it.
+
+Assisted-by: Claude:claude-opus-5
+Signed-off-by: Lachlan Hodges <lachlan.hodges@morsemicro.com>
+---
+ drivers/net/wireless/morsemicro/mm81x/skbq.c | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/net/wireless/morsemicro/mm81x/skbq.c b/drivers/net/wireless/morsemicro/mm81x/skbq.c
+index 25655bd56d14..3bf15e7c38d8 100644
+--- a/drivers/net/wireless/morsemicro/mm81x/skbq.c
++++ b/drivers/net/wireless/morsemicro/mm81x/skbq.c
+@@ -231,10 +231,9 @@ static bool mm81x_tx_h_is_ps_filtered(struct mm81x_skbq *mq,
+ 	WARN_ON_ONCE(!(le32_to_cpu(tx_sts->flags) &
+ 		       MM81X_TX_STATUS_FLAGS_PS_FILTERED));
+ 
+-	if (vif->type == NL80211_IFTYPE_AP) {
+-		__mm81x_skbq_drop_pending_skb(mq, skb);
+-		return true;
+-	}
++	/* mac80211 buffers frames in AP mode */
++	if (vif->type == NL80211_IFTYPE_AP)
++		return false;
+ 
+ 	if (vif->type == NL80211_IFTYPE_STATION) {
+ 		mm81x_skbq_insert_pending(mq, skb, tx_sts->pkt_id);
+-- 
+2.43.0
+

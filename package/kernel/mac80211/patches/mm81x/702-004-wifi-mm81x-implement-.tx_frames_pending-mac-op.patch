@@ -1,0 +1,38 @@
+From 26d3d878b452fe86b741e7b8d46a85f0a8d5eeb9 Mon Sep 17 00:00:00 2001
+From: Lachlan Hodges <lachlan.hodges@morsemicro.com>
+Date: Mon, 10 Aug 2026 17:42:08 +1000
+Subject: [PATCH 07/11] wifi: mm81x: implement .tx_frames_pending() mac op
+
+Implement .tx_frames_pending() to assist mac80211 when deciding whether
+we should enter powersave such that we don't enter when there are
+pending tx frames.
+
+Signed-off-by: Lachlan Hodges <lachlan.hodges@morsemicro.com>
+---
+ drivers/net/wireless/morsemicro/mm81x/mac.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+--- a/drivers/net/wireless/morsemicro/mm81x/mac.c
++++ b/drivers/net/wireless/morsemicro/mm81x/mac.c
+@@ -2035,6 +2035,13 @@ static void mm81x_mac_ops_flush(struct i
+ 		mm81x_mac_wait_queues(mors);
+ }
+ 
++static bool mm81x_mac_ops_tx_frames_pending(struct ieee80211_hw *hw)
++{
++	struct mm81x *mors = hw->priv;
++
++	return mm81x_mac_has_tx_pending(mors);
++}
++
+ static int mm81x_mac_ops_set_rts_threshold(struct ieee80211_hw *hw, u32 value)
+ {
+ 	struct mm81x *mors = hw->priv;
+@@ -2259,6 +2266,7 @@ static const struct ieee80211_ops mm81x_
+ 	.configure_filter = mm81x_mac_ops_configure_filter,
+ 	.sta_state = mm81x_mac_ops_sta_state,
+ 	.flush = mm81x_mac_ops_flush,
++	.tx_frames_pending = mm81x_mac_ops_tx_frames_pending,
+ 	.set_frag_threshold = mm81x_mac_set_frag_threshold,
+ 	.set_rts_threshold = mm81x_mac_ops_set_rts_threshold,
+ 	.sta_statistics = mm81x_mac_ops_sta_statistics,

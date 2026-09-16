@@ -1,0 +1,121 @@
+From 971c73fad9c1f060beb52e417362f0c49318d5ea Mon Sep 17 00:00:00 2001
+From: Lachlan Hodges <lachlan.hodges@morsemicro.com>
+Date: Sun, 9 Aug 2026 19:20:30 +1000
+Subject: [PATCH 04/11] wifi: mm81x: move beacon work and init below the tx op
+
+Move mm81x_mac_beacon_work() and mm81x_mac_beacon_init() to below
+mm81x_mac_ops_tx() to prepare for future multicast handling such that
+we avoid a forward declaration. No functional change.
+
+Signed-off-by: Lachlan Hodges <lachlan.hodges@morsemicro.com>
+---
+ drivers/net/wireless/morsemicro/mm81x/mac.c | 84 ++++++++++-----------
+ 1 file changed, 42 insertions(+), 42 deletions(-)
+
+--- a/drivers/net/wireless/morsemicro/mm81x/mac.c
++++ b/drivers/net/wireless/morsemicro/mm81x/mac.c
+@@ -445,39 +445,6 @@ static void mm81x_beacon_h_fill_tx_info(
+ 			cpu_to_le32(MM81X_TX_CONF_FLAGS_IMMEDIATE_REPORT);
+ }
+ 
+-static void mm81x_mac_beacon_tasklet(struct tasklet_struct *t)
+-{
+-	struct mm81x_vif *mors_vif =
+-		from_tasklet(mors_vif, t, u.ap.beacon_tasklet);
+-	struct mm81x *mors = mm81x_vif_to_mors(mors_vif);
+-	struct mm81x_skbq *mq;
+-	struct sk_buff *beacon;
+-	struct ieee80211_vif *vif = mm81x_vif_to_ieee80211_vif(mors_vif);
+-	struct mm81x_skb_tx_info tx_info = { 0 };
+-	int num_bcn_vifs = atomic_read(&mors->num_bcn_vifs);
+-
+-	mq = mm81x_hif_get_tx_beacon_queue(mors);
+-	if (!mq) {
+-		dev_err(mors->dev, "no matching beacon Q found");
+-		return;
+-	}
+-
+-	if (mm81x_skbq_count(mq) >= num_bcn_vifs) {
+-		dev_err(mors->dev,
+-			"previous beacon not consumed, dropping req [id:%d]",
+-			mors_vif->id);
+-		return;
+-	}
+-
+-	beacon = ieee80211_beacon_get(mors->hw, vif, false);
+-	if (!beacon)
+-		return;
+-
+-	mm81x_beacon_h_fill_tx_info(mors, &tx_info, mors_vif,
+-				    cfg80211_chandef_s1g_pri_width(&mors->chandef));
+-	mm81x_skbq_skb_tx(mq, &beacon, &tx_info, MM81X_SKB_CHAN_BEACON);
+-}
+-
+ void mm81x_mac_beacon_irq_handle(struct mm81x *mors, u32 status)
+ {
+ 	int vif_id;
+@@ -497,15 +464,6 @@ void mm81x_mac_beacon_irq_handle(struct
+ 	}
+ }
+ 
+-static void mm81x_mac_beacon_init(struct mm81x_vif *mors_vif)
+-{
+-	struct mm81x *mors = mm81x_vif_to_mors(mors_vif);
+-
+-	tasklet_setup(&mors_vif->u.ap.beacon_tasklet, mm81x_mac_beacon_tasklet);
+-	mm81x_mac_beacon_irq_enable(mors_vif, true);
+-	atomic_inc(&mors->num_bcn_vifs);
+-}
+-
+ static struct hw_scan_tlv_hdr mm81x_hw_scan_h_pack_tlv_hdr(u16 tag, u16 len)
+ {
+ 	struct hw_scan_tlv_hdr hdr = { .tag = cpu_to_le16(tag),
+@@ -1329,6 +1287,48 @@ static void mm81x_mac_ops_tx(struct ieee
+ 				      MM81X_SKB_CHAN_DATA);
+ }
+ 
++static void mm81x_mac_beacon_tasklet(struct tasklet_struct *t)
++{
++	struct mm81x_vif *mors_vif =
++		from_tasklet(mors_vif, t, u.ap.beacon_tasklet);
++	struct mm81x *mors = mm81x_vif_to_mors(mors_vif);
++	struct mm81x_skbq *mq;
++	struct sk_buff *beacon;
++	struct ieee80211_vif *vif = mm81x_vif_to_ieee80211_vif(mors_vif);
++	struct mm81x_skb_tx_info tx_info = { 0 };
++	int num_bcn_vifs = atomic_read(&mors->num_bcn_vifs);
++
++	mq = mm81x_hif_get_tx_beacon_queue(mors);
++	if (!mq) {
++		dev_err(mors->dev, "no matching beacon Q found");
++		return;
++	}
++
++	if (mm81x_skbq_count(mq) >= num_bcn_vifs) {
++		dev_err(mors->dev,
++			"previous beacon not consumed, dropping req [id:%d]",
++			mors_vif->id);
++		return;
++	}
++
++	beacon = ieee80211_beacon_get(mors->hw, vif, false);
++	if (!beacon)
++		return;
++
++	mm81x_beacon_h_fill_tx_info(mors, &tx_info, mors_vif,
++				    cfg80211_chandef_s1g_pri_width(&mors->chandef));
++	mm81x_skbq_skb_tx(mq, &beacon, &tx_info, MM81X_SKB_CHAN_BEACON);
++}
++
++static void mm81x_mac_beacon_init(struct mm81x_vif *mors_vif)
++{
++	struct mm81x *mors = mm81x_vif_to_mors(mors_vif);
++
++	tasklet_setup(&mors_vif->u.ap.beacon_tasklet, mm81x_mac_beacon_tasklet);
++	mm81x_mac_beacon_irq_enable(mors_vif, true);
++	atomic_inc(&mors->num_bcn_vifs);
++}
++
+ static void mm81x_mac_ops_stop(struct ieee80211_hw *hw, bool suspend)
+ {
+ 	struct mm81x *mors = hw->priv;

@@ -3,6 +3,9 @@ CONFIG_TARGET_ramips_mt7621=y
 CONFIG_TARGET_ramips_mt7621_DEVICE_morse_halowlink_apx=y
 CONFIG_TARGET_ROOTFS_INITRAMFS=n
 
+# APP-7666: distinguish retail product from evaluation images. EKH targets should leave this unconfigured.
+CONFIG_VERSION_PRODUCT="halowlink-apx"
+
 CONFIG_MORSE_SDIO_ALIGNMENT=8
 
 CONFIG_TARGET_PREINIT_IP="192.168.12.1"

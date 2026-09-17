@@ -349,13 +349,13 @@ case "${MODE}" in
             echo
         ) > .config
 
-        COMMIT_HASH=$(git rev-parse --short HEAD 2> /dev/null || true)
+        COMMIT_HASH=$(git rev-parse --short=6 HEAD 2> /dev/null || true)
         # If we're not on an official tag, change to the current hash/time.
         # This avoids people thinking they have a 'real' version, particularly when
         # master has bumped version but none of the key new features are in yet,
         # and will catch most naive open source builds as well.
         if [ -n "$COMMIT_HASH" ]; then
-            sed -i "s/^CONFIG_VERSION_CODE=\"Morse-.*-dev\"$/CONFIG_VERSION_CODE=\"Morse-$COMMIT_HASH-$(date +%Y-%m-%d)\"/" .config
+            sed -i "s/^CONFIG_VERSION_CODE=\"Morse-.*-dev\"$/CONFIG_VERSION_CODE=\"Morse-$(date +%y%m%d)-$COMMIT_HASH\"/" .config
         fi
 
         # Append the board name to the custom release repository URL so each board

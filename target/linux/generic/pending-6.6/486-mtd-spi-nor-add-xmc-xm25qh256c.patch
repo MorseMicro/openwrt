@@ -1,0 +1,27 @@
+From: Quectel (elijah.zhou) <elijah.zhou@quectel.com>
+Subject: [PATCH] mtd: spi-nor: xmc: add support for XMC XM25QH256C
+
+The XMC XM25QH256C is a 32MB SPI NOR chip. As it is larger than 16MB it
+requires 4-byte address opcodes. Added to support a secondary flash
+supplier (Quectel SDM108A / MorseMicro HaLowLink APX).
+
+Datasheet provided by Quectel. JEDEC ID 0x204019.
+
+Signed-off-by: Lyall Beveridge <lyall.beveridge@morsemicro.com>
+---
+ drivers/mtd/spi-nor/xmc.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+--- a/drivers/mtd/spi-nor/xmc.c
++++ b/drivers/mtd/spi-nor/xmc.c
+@@ -22,6 +22,10 @@ static const struct flash_info xmc_nor_p
+ 	{ "XM25QH128C", INFO(0x204018, 0, 64 * 1024, 256)
+ 		NO_SFDP_FLAGS(SECT_4K | SPI_NOR_DUAL_READ |
+ 			      SPI_NOR_QUAD_READ) },
++	{ "XM25QH256C", INFO(0x204019, 0, 64 * 1024, 512)
++		FIXUP_FLAGS(SPI_NOR_4B_OPCODES)
++		NO_SFDP_FLAGS(SECT_4K | SPI_NOR_DUAL_READ |
++			      SPI_NOR_QUAD_READ) },
+ };
+ 
+ const struct spi_nor_manufacturer spi_nor_xmc = {

@@ -17,6 +17,7 @@ PKG_SOURCE_PROTO:=git
 PKG_SOURCE_VERSION:=v$(PKG_VERSION)
 
 PKG_MAINTAINER:=Tony Ambardar <itugrok@yahoo.com>
+PKG_CPE_ID:=cpe:/a:kernel:bpftool
 
 PKG_BUILD_FLAGS:=no-mips16 gc-sections lto
 PKG_BUILD_PARALLEL:=1

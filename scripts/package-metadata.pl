@@ -9,6 +9,9 @@ use JSON::PP;
 
 my %board;
 
+# metadata.component (see gen_image_cyclonedxsbom).
+my ($sbom_version_number, $sbom_version_code, $sbom_version_dist);
+
 sub version_to_num($) {
 	my $str = shift;
 	my $num = 0;
@@ -639,7 +642,7 @@ sub image_manifest_packages($)
 }
 
 sub dump_cyclonedxsbom_json {
-	my (@components) = @_;
+	my ($metadata_component, @components) = @_;
 
 	my $uuid = sprintf(
 	    "%04x%04x-%04x-%04x-%04x-%04x%04x%04x",
@@ -656,6 +659,7 @@ sub dump_cyclonedxsbom_json {
 		version => 1,
 		metadata => {
 			timestamp => gmtime->datetime . 'Z',
+			$metadata_component ? (component => $metadata_component) : (),
 		},
 		"components" => [@components],
 	};
@@ -731,13 +735,32 @@ sub gen_image_cyclonedxsbom() {
 			name => $pkg->{name},
 			version => $version,
 			@licenses > 0 ? (licenses => [ @licenses ]) : (),
-			$pkg->{cpe_id} ? (cpe => $pkg->{cpe_id}.":".$version) : (),
+			# kmods inherit the kernel CPE; the kernel component already covers those CVEs
+			($pkg->{cpe_id} && $name !~ /^kmod-/) ? (cpe => $pkg->{cpe_id}.":".$version) : (),
 			$type ? (type => $type) : (),
 			$version ? (version => $version) : (),
 		};
 	}
 
-	print dump_cyclonedxsbom_json(@components);
+	my $metadata_component;
+	if ($sbom_version_number) {
+		$metadata_component = {
+			type => "operating-system",
+			name => $sbom_version_dist || "OpenWrt",
+			version => $sbom_version_code || $sbom_version_number,
+			cpe => "cpe:/o:openwrt:openwrt:$sbom_version_number",
+		};
+
+		# list OpenWrt as a component too, so DT scans platform-level CVEs
+		push @components, {
+			type => "operating-system",
+			name => "OpenWrt",
+			version => $sbom_version_number,
+			cpe => "cpe:/o:openwrt:openwrt:$sbom_version_number",
+		};
+	}
+
+	print dump_cyclonedxsbom_json($metadata_component, @components);
 }
 
 sub gen_package_cyclonedxsbom() {
@@ -790,11 +813,14 @@ sub gen_package_cyclonedxsbom() {
 		};
 	}
 
-	print dump_cyclonedxsbom_json(@components);
+	print dump_cyclonedxsbom_json(undef, @components);
 }
 
 sub parse_command() {
-	GetOptions("ignore=s", \@ignore);
+	GetOptions("ignore=s", \@ignore,
+		"version-number=s", \$sbom_version_number,
+		"version-code=s", \$sbom_version_code,
+		"version-dist=s", \$sbom_version_dist);
 	my $cmd = shift @ARGV;
 	for ($cmd) {
 		/^mk$/ and return gen_package_mk();

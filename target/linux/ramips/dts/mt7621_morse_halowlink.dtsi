@@ -163,31 +163,6 @@
 		compatible = "pwm-gpio";
 		gpios = <&gpio 32 GPIO_ACTIVE_LOW>;
 	};
-
-	mmc_clock: mmc_clock@0 {
-		#clock-cells = <0>;
-		compatible = "fixed-clock";
-		clock-frequency = <48000000>;
-	};
-
-	mmc_fixed_3v3: fixedregulator@0 {
-		compatible = "regulator-fixed";
-		regulator-name = "mmc_power";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		enable-active-high;
-		regulator-always-on;
-	};
-
-	mmc_fixed_1v8_io: fixedregulator@1 {
-		compatible = "regulator-fixed";
-		regulator-name = "mmc_io";
-		regulator-min-microvolt = <1800000>;
-		regulator-max-microvolt = <1800000>;
-		enable-active-high;
-		regulator-always-on;
-
-	};
 };
 
 &i2c {
@@ -204,25 +179,9 @@
 };
 
 &sdhci {
-	compatible = "mediatek,mt7620-mmc";
 	status = "okay";
-	bus-width = <4>;
-	max-frequency = <48000000>;
-
-	cap-sd-highspeed;
-	cap-mmc-highspeed;
-	vmmc-supply = <&mmc_fixed_3v3>;
-	vqmmc-supply = <&mmc_fixed_3v3>;
 	non-removable;
-	disable-wp;
 	cap-sdio-irq;
-
-	pinctrl-names = "default", "state_uhs";
-	pinctrl-0 = <&sdhci_pins>;
-	pinctrl-1 = <&sdhci_pins>;
-
-	clocks = <&mmc_clock>, <&mmc_clock>;
-	clock-names = "source", "hclk";
 };
 
 &spi0 {
@@ -259,10 +218,26 @@
 				read-only;
 			};
 
-			factory: partition@90000 {
+			partition@90000 {
 				label = "factory";
 				reg = <0x90000 0x10000>;
 				read-only;
+
+				nvmem-layout {
+					compatible = "fixed-layout";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					eeprom_factory_0: eeprom@0 {
+						reg = <0x0 0x400>;
+					};
+
+					macaddr_factory_4000: macaddr@4000 {
+						compatible = "mac-base";
+						reg = <0x4000 0x6>;
+						#nvmem-cell-cells = <1>;
+					};
+				};
 			};
 
 			partition@A0000 {
@@ -282,7 +257,8 @@
 	wifi@0,0 {
 		compatible = "mediatek,mt76";
 		reg = <0x0000 0 0 0 0>;
-		mediatek,mtd-eeprom = <&factory 0x0>;
+		nvmem-cells = <&eeprom_factory_0>;
+		nvmem-cell-names = "eeprom";
 	};
 };
 
@@ -293,9 +269,8 @@
 };
 
 &gmac0 {
-	nvmem-cells = <&macaddr_factory_4000>;
+	nvmem-cells = <&macaddr_factory_4000 1>;
 	nvmem-cell-names = "mac-address";
-	mac-address-increment = <1>;
 };
 
 &switch0 {
@@ -313,7 +288,7 @@
 		wan: port@4 {
 			status = "okay";
 			label = "wan";
-			nvmem-cells = <&macaddr_factory_4000>;
+			nvmem-cells = <&macaddr_factory_4000 0>;
 			nvmem-cell-names = "mac-address";
 		};
 	};
@@ -349,16 +324,6 @@
 /* HaLow DBG_TX is connected to this uart (other lines are unused). */
 &uartlite2 {
 	status = "okay";
-};
-
-&factory {
-	compatible = "nvmem-cells";
-	#address-cells = <1>;
-	#size-cells = <1>;
-
-	macaddr_factory_4000: macaddr@4000 {
-		reg = <0x4000 0x6>;
-	};
 };
 
 &xhci {

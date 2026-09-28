@@ -1,0 +1,15 @@
+# Support USB console serial adapter for EKH03/EKH04.
+
+morse_usb_console() {
+	. /lib/functions.sh
+
+	case "$(board_name)" in
+	morse,ekh03*|\
+	morse,ekh04*)
+		grep -q '^ttyUSB0:' /etc/inittab || \
+			echo 'ttyUSB0::askfirst:/usr/libexec/login.sh' >> /etc/inittab
+		;;
+	esac
+}
+
+[ "$INITRAMFS" = "1" ] || boot_hook_add preinit_main morse_usb_console

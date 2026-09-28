@@ -62,29 +62,6 @@ endef
 
 $(eval $(call KernelPackage,sdhci-mt7620))
 
-define KernelPackage/mmc-mt7620
-  SUBMENU:=Other modules
-  TITLE:=MT7620 MMC
-  DEPENDS:=@(TARGET_ramips_mt7620||TARGET_ramips_mt76x8||TARGET_ramips_mt7621) +kmod-mmc
-  KCONFIG:= \
-	CONFIG_MMC_MTK \
-	CONFIG_MMC_CQHCI \
-	CONFIG_MMC_HSQ \
-	CONFIG_PWRSEQ_EMMC \
-	CONFIG_PWRSEQ_SIMPLE
-  FILES:= \
-	$(LINUX_DIR)/drivers/mmc/host/mtk-sd.ko \
-	$(LINUX_DIR)/drivers/mmc/host/mmc_hsq.ko \
-	$(LINUX_DIR)/drivers/mmc/host/cqhci.ko
-  AUTOLOAD:=$(call AutoLoad,99,cqhci mmc_hsq mtk-sd)
-endef
-
-define KernelPackage/mmc-mt7620/description
- Kernel modules for enable mainline mmc mt7620 controller.
-endef
-
-$(eval $(call KernelPackage,mmc-mt7620))
-
 I2C_RALINK_MODULES:= \
   CONFIG_I2C_RALINK:drivers/i2c/busses/i2c-ralink
 

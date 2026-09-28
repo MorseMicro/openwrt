@@ -2135,7 +2135,7 @@ define Device/morse_halowlink1_base
   # DEVICE_MODEL is set per-variant below: the product uses the HaLowLink 1
   # product name, while the eval kit uses its own MM6108-EKH model name.
   BOARD_NAME := halowlink1
-  DEVICE_PACKAGES := kmod-mmc-mt7620 kmod-mt7603 \
+  DEVICE_PACKAGES := kmod-mmc-mtk kmod-mt7603 \
     kmod-morse netifd-morse morse-fw-6108
   SUPPORTED_DEVICES := morse,halowlink1
   # IMAGE_PREFIX is openwrt-<vercode>-<sanitized-model>; each variant below
@@ -2169,7 +2169,7 @@ define Device/morse_halowlink2_base
   # product name, while the eval kit uses its own MM8108-EKH model name.
   BOARD_NAME := halowlink2
   DEVICE_DTS := mt7621_morse_halowlink2
-  DEVICE_PACKAGES := kmod-mmc-mt7620 kmod-mt7603 \
+  DEVICE_PACKAGES := kmod-mmc-mtk kmod-mt7603 \
 	kmod-morse netifd-morse morse-fw-8108
   SUPPORTED_DEVICES := morse,halowlink2
   # IMAGE_PREFIX is openwrt-<vercode>-<sanitized-model>; each variant below
@@ -2203,7 +2203,7 @@ define Device/morse_halowlink_apx_base
   # product name, while the eval kit uses its own MM6108-EKH model name.
   BOARD_NAME := halowlink-apx
   DEVICE_DTS := mt7621_morse_halowlink_apx
-  DEVICE_PACKAGES := kmod-mmc-mt7620 kmod-mt7603 \
+  DEVICE_PACKAGES := kmod-mmc-mtk kmod-mt7603 \
 	kmod-morse netifd-morse morse-fw-6108
   SUPPORTED_DEVICES := morse,halowlink-apx
   # IMAGE_PREFIX is openwrt-<vercode>-<sanitized-model>; each variant below

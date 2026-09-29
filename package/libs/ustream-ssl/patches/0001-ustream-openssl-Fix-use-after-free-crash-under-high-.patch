@@ -1,0 +1,172 @@
+From 99f1c0db5a729f615bc5114b3b52fd8ac8083f34 Mon Sep 17 00:00:00 2001
+From: Hauke Mehrtens <hauke@hauke-m.de>
+Date: Sun, 22 Feb 2026 20:14:52 +0100
+Subject: [PATCH] ustream-openssl: Fix use-after-free crash under high load and
+ optimize BIO_METHOD lifecycle
+
+This change fixes a crash that occurred when many SSL connections were freed
+simultaneously (e.g., under high load in uhttpd). The original code had two
+related issues:
+
+**Issue 1: Use-After-Free in Session Cleanup**
+The __ustream_ssl_session_free() function was calling BIO_get_data() AFTER
+SSL_free() had already destroyed the BIO. This violated OpenSSL's resource
+ownership model - once SSL_free() is called, all associated BIOs are freed
+and their pointers become invalid.
+
+**Issue 2: Lifecycle Management**
+The bio_ctx and BIO_METHOD were being allocated per-connection, but freed
+at the wrong time relative to BIO destruction, causing corruption or leaks.
+
+**Solution:**
+1. Move BIO context cleanup to the BIO's destroy callback (s_ustream_free)
+   where it belongs - cleanup happens as part of BIO destruction, not after
+
+2. Simplify __ustream_ssl_session_free() to only call SSL_shutdown() and
+   SSL_free(), delegating all BIO cleanup to OpenSSL
+
+3. Optimize BIO_METHOD lifecycle: create it once as a static reusable
+   callback table instead of allocating a new one per connection. The
+   BIO_METHOD is just read-only configuration, not stateful data.
+
+4. Each connection still gets its own isolated bio_ctx with its own stream
+   pointer, so there's no data sharing between connections.
+
+This follows OpenSSL's documented patterns for custom BIO implementation and
+eliminates memory safety issues under concurrent load.
+
+Fixes crash under high load with backtrace:
+  0x0000ffff81296d08 in BIO_get_data () from libcrypto.so.3
+  __ustream_ssl_session_free () at ustream-openssl.c
+  ustream_ssl_free () at ustream-ssl.c
+  ustream_free () at libubox/ustream.c
+
+This bug was fixed with help of AI after providing the stacktrace.
+
+Fixes: https://github.com/openwrt/openwrt/issues/19349
+Fixes: https://github.com/openwrt/openwrt/issues/20134
+Fixes: 5896991e46a3 ("ustream-openssl: fix BIO_method memory leak")
+Link: https://github.com/openwrt/ustream-ssl/pull/4
+Signed-off-by: Hauke Mehrtens <hauke@hauke-m.de>
+---
+ ustream-io-openssl.c | 45 ++++++++++++++++++++++++++++++++------------
+ ustream-openssl.c    | 12 ------------
+ ustream-openssl.h    |  1 -
+ 3 files changed, 33 insertions(+), 25 deletions(-)
+
+diff --git a/ustream-io-openssl.c b/ustream-io-openssl.c
+index 4ca77de..01260b4 100644
+--- a/ustream-io-openssl.c
++++ b/ustream-io-openssl.c
+@@ -36,9 +36,15 @@ s_ustream_new(BIO *b)
+ static int
+ s_ustream_free(BIO *b)
+ {
++	struct bio_ctx *ctx;
++
+ 	if (!b)
+ 		return 0;
+ 
++	ctx = (struct bio_ctx *)BIO_get_data(b);
++	if (ctx)
++		free(ctx);
++
+ 	BIO_set_data(b, NULL);
+ 	BIO_set_init(b, 0);
+ 	BIO_clear_flags(b, ~0);
+@@ -116,22 +122,36 @@ static long s_ustream_ctrl(BIO *b, int cmd, long num, void *ptr)
+ 	};
+ }
+ 
++static BIO_METHOD *ustream_meth(void)
++{
++	static BIO_METHOD *meth = NULL;
++
++	if (meth)
++		return meth;
++
++	meth = BIO_meth_new(100 | BIO_TYPE_SOURCE_SINK, "ustream");
++	BIO_meth_set_write(meth, s_ustream_write);
++	BIO_meth_set_read(meth, s_ustream_read);
++	BIO_meth_set_puts(meth, s_ustream_puts);
++	BIO_meth_set_gets(meth, s_ustream_gets);
++	BIO_meth_set_ctrl(meth, s_ustream_ctrl);
++	BIO_meth_set_create(meth, s_ustream_new);
++	BIO_meth_set_destroy(meth, s_ustream_free);
++
++	return meth;
++}
++
+ static BIO *ustream_bio_new(struct ustream *s)
+ {
+ 	BIO *bio;
+-	struct bio_ctx *ctx = calloc(1, sizeof(struct bio_ctx));
++	struct bio_ctx *ctx;
++
++	ctx = calloc(1, sizeof(struct bio_ctx));
++	if (!ctx)
++		return NULL;
+ 
+ 	ctx->stream = s;
+-	ctx->meth = BIO_meth_new(100 | BIO_TYPE_SOURCE_SINK, "ustream");
+-
+-	BIO_meth_set_write(ctx->meth, s_ustream_write);
+-	BIO_meth_set_read(ctx->meth, s_ustream_read);
+-	BIO_meth_set_puts(ctx->meth, s_ustream_puts);
+-	BIO_meth_set_gets(ctx->meth, s_ustream_gets);
+-	BIO_meth_set_ctrl(ctx->meth, s_ustream_ctrl);
+-	BIO_meth_set_create(ctx->meth, s_ustream_new);
+-	BIO_meth_set_destroy(ctx->meth, s_ustream_free);
+-	bio = BIO_new(ctx->meth);
++	bio = BIO_new(ustream_meth());
+ 	BIO_set_data(bio, ctx);
+ 
+ 	return bio;
+@@ -155,5 +175,6 @@ __hidden void ustream_set_io(struct ustream_ssl *us)
+ 	else
+ 		bio = fd_bio_new(us->fd.fd);
+ 
+-	SSL_set_bio(us->ssl, bio, bio);
++	if (bio)
++		SSL_set_bio(us->ssl, bio, bio);
+ }
+diff --git a/ustream-openssl.c b/ustream-openssl.c
+index b357ebc..4ea9468 100644
+--- a/ustream-openssl.c
++++ b/ustream-openssl.c
+@@ -247,20 +247,8 @@ __hidden void __ustream_ssl_context_free(struct ustream_ssl_ctx *ctx)
+ 
+ __hidden void __ustream_ssl_session_free(struct ustream_ssl *us)
+ {
+-	BIO *bio = SSL_get_wbio(us->ssl);
+-	struct bio_ctx *ctx;
+-
+ 	SSL_shutdown(us->ssl);
+ 	SSL_free(us->ssl);
+-
+-	if (!us->conn)
+-		return;
+-
+-	ctx = BIO_get_data(bio);
+-	if (ctx) {
+-		BIO_meth_free(ctx->meth);
+-		free(ctx);
+-	}
+ }
+ 
+ static void ustream_ssl_error(struct ustream_ssl *us, int ret)
+diff --git a/ustream-openssl.h b/ustream-openssl.h
+index 847f5aa..5963f0c 100644
+--- a/ustream-openssl.h
++++ b/ustream-openssl.h
+@@ -37,7 +37,6 @@ struct ustream_ssl_ctx {
+ };
+ 
+ struct bio_ctx {
+-	BIO_METHOD *meth;
+ 	struct ustream *stream;
+ };
+ 
+-- 
+2.53.0
+

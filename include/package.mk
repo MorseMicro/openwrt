@@ -85,9 +85,6 @@ endif
 ifdef USE_SOURCE_DIR
   QUILT:=1
 endif
-ifneq ($(wildcard $(PKG_BUILD_DIR)/.source_dir),)
-  QUILT:=1
-endif
 
 include $(INCLUDE_DIR)/quilt.mk
 
@@ -196,7 +193,6 @@ ifdef USE_SOURCE_DIR
 	rm -rf $(PKG_BUILD_DIR)
 	$(if $(wildcard $(USE_SOURCE_DIR)/*),,@echo "Error: USE_SOURCE_DIR=$(USE_SOURCE_DIR) path not found"; false)
 	ln -snf $(USE_SOURCE_DIR) $(PKG_BUILD_DIR)
-	touch $(PKG_BUILD_DIR)/.source_dir
   endef
 endif
 
